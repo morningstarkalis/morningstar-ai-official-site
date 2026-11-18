@@ -27,7 +27,7 @@ Use these settings:
 - Production branch: main
 - Build command: leave blank (or use `exit 0` if the dashboard requires a command)
 - Build output directory: `.` (repository root)
-- Root directory: `/` (repository root; leave the default)
+- Root directory (advanced): leave blank/default so Pages uses the repository root
 
 Cloudflare Pages will serve the top-level `index.html` on the free `*.pages.dev` address. No custom domain is needed. Git integration automatically deploys new commits to the connected production branch.
 
