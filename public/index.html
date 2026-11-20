@@ -16,6 +16,31 @@ section{padding:88px 9vw;border-top:1px solid #ffffff0d}.head{display:flex;justi
 @media(max-width:1050px){.nav{gap:10px}.nav a{font-size:9px}.visual{right:0;opacity:.6}}
 @media(max-width:800px){.top{padding:0 5vw}.nav{display:none}.menu{display:block}.nav.open{display:flex;position:absolute;top:71px;left:0;right:0;background:#0b1017;padding:18px 6vw;flex-direction:column;border-bottom:1px solid var(--line)}.hero{padding:85px 7vw;min-height:620px}.visual{right:-13%;width:57vw;opacity:.27}section{padding:70px 7vw}.head{align-items:start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}.cols{grid-template-columns:1fr}.tr{grid-template-columns:1fr 1.4fr}.tr small{grid-column:2}.tr.h span:last-child{display:none}}
 @media(max-width:540px){.brand b{font-size:10px}.brand small{font-size:8px}.hero{padding:75px 6vw;min-height:620px}.visual{right:-35%;width:78vw}.hero h1{font-size:47px}.intro{font-size:12px}.buttons{flex-wrap:wrap}section{padding:62px 6vw}.grid{grid-template-columns:1fr}.card{min-height:150px}.tr{grid-template-columns:1fr;gap:7px;padding:14px}.tr small{grid-column:auto}.tr.h span:last-child{display:none}footer{padding:28px 6vw;align-items:start;flex-direction:column}}
+
+.ms-shell{border:1px solid var(--line);background:var(--panel);padding:24px;margin-top:10px}
+.ms-toolbar,.ms-row,.ms-actions{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.ms-tabs{display:flex;gap:8px;margin-bottom:18px}
+.ms-tab,.ms-small{border:1px solid var(--line);background:#0a1017;color:var(--muted);padding:9px 13px;border-radius:4px;font-size:11px}
+.ms-tab.active,.ms-small:hover{border-color:var(--a);color:var(--a)}
+.ms-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:760px}
+.ms-field{display:grid;gap:6px;font-size:11px;color:var(--muted)}
+.ms-field.full{grid-column:1/-1}
+.ms-field input,.ms-field textarea,.ms-field select{width:100%;background:#080d14;border:1px solid var(--line);color:var(--text);padding:12px;font:12px Manrope,"Noto Sans TC",sans-serif;border-radius:3px}
+.ms-field textarea{min-height:145px;resize:vertical;line-height:1.65}
+.ms-card{border:1px solid var(--line);background:#0a1017;padding:18px;margin-top:14px}
+.ms-card h3{margin:0 0 10px;font-size:14px}
+.ms-muted{font-size:11px;color:var(--muted);line-height:1.8}
+.ms-badge{display:inline-block;border:1px solid #d8b66b55;color:var(--a);padding:5px 8px;font:9px "DM Mono";letter-spacing:.6px}
+.ms-ok{color:#9cddb6}.ms-warn{color:#e8c783}.ms-error{color:#f0a8a8}
+.ms-table{width:100%;border-collapse:collapse;font-size:11px;margin-top:12px}
+.ms-table th,.ms-table td{padding:11px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.ms-table th{font:9px "DM Mono";color:var(--a);letter-spacing:1px}
+.ms-hidden{display:none!important}
+.ms-status{padding:10px 12px;border:1px solid var(--line);margin:12px 0;font-size:11px;line-height:1.7;color:var(--muted)}
+.ms-legal{border-left:2px solid var(--a);padding:12px 15px;background:var(--glow);font-size:11px;line-height:1.8;color:var(--muted)}
+.ms-danger{color:#f0a8a8}
+@media(max-width:600px){.ms-form{grid-template-columns:1fr}.ms-field.full{grid-column:auto}.ms-shell{padding:16px}.ms-table{display:block;overflow-x:auto;white-space:nowrap}}
+
 </style>
 </head>
 <body>
@@ -61,17 +86,180 @@ section{padding:88px 9vw;border-top:1px solid #ffffff0d}.head{display:flex;justi
 <button class="btn" id="check" data-zh="檢查答案" data-en="Check answer">檢查答案</button><div id="feedback" aria-live="polite"></div><p class="mono" style="margin-bottom:0" data-zh="示範模式｜規則式回饋，非模型 API" data-en="DEMO MODE | RULE-BASED FEEDBACK, NOT A MODEL API">示範模式｜規則式回饋，非模型 API</p></div></section>
 <section id="membership"><div class="kicker">07 / ACCESS CONTROL</div><h2 data-zh="會員與授權管理" data-en="Membership & Licensing">會員與授權管理</h2><p class="sub" data-zh="目前先提供產品存取與授權制度的資訊架構。真正的登入、付款、金鑰簽發及權限控管需由安全的伺服器端服務完成。" data-en="This section outlines future product access and licensing. Real authentication, payments, key issuance, and access control require secure server-side services.">目前先提供產品存取與授權制度的資訊架構。</p>
 <div class="cols"><div class="panel"><b data-zh="規劃中的會員功能" data-en="Planned membership features">規劃中的會員功能</b><div class="row"><span>01</span><b data-zh="帳戶登入與電子郵件驗證" data-en="Account login and email verification">帳戶登入與電子郵件驗證</b></div><div class="row"><span>02</span><b data-zh="個人授權與裝置管理" data-en="Personal licenses and device management">個人授權與裝置管理</b></div><div class="row"><span>03</span><b data-zh="訂單與發票紀錄" data-en="Orders and invoice history">訂單與發票紀錄</b></div><div class="row"><span>04</span><b data-zh="授權金鑰簽發／撤銷" data-en="License key issuance and revocation">授權金鑰簽發／撤銷</b></div><div class="row"><span>05</span><b data-zh="管理員稽核紀錄" data-en="Administrator audit log">管理員稽核紀錄</b></div></div><div class="security"><strong data-zh="安全邊界" data-en="Security boundary">安全邊界</strong><p class="copy" data-zh="不要將密碼、付款資料、私鑰或授權秘密寫入前端程式碼、Git 儲存庫或公開 JSON。正式啟用前需完成後端、隱私政策與安全測試。" data-en="Never place passwords, payment data, private keys, or license secrets in frontend code, Git repositories, or public JSON. Backend, privacy policy, and security testing are required before launch.">不要將密碼、付款資料、私鑰或授權秘密寫入前端程式碼、Git 儲存庫或公開 JSON。</p></div></div></section>
+
+<section id="account">
+ <div class="kicker">08 / MEMBER & LICENSE PORTAL</div>
+ <h2 data-zh="會員、授權與安全下載" data-en="Membership, Licensing & Secure Downloads">會員、授權與安全下載</h2>
+ <p class="sub" data-zh="建立帳戶後，可查看會員狀態、提交授權申請，並在授權核准後下載 MorningStar Skill。所有檔案都經伺服器端會員與授權檢查，不使用公開下載連結。" data-en="Create an account to manage membership, request a license, and download MorningStar Skill after approval. Downloads are protected by server-side account and license checks, not public file links.">建立帳戶後，可查看會員狀態、提交授權申請，並在授權核准後下載 MorningStar Skill。所有檔案都經伺服器端會員與授權檢查，不使用公開下載連結。</p>
+ <div class="ms-shell">
+  <div id="ms-auth">
+   <div class="ms-tabs">
+    <button type="button" class="ms-tab active" data-ms-tab="login" data-zh="會員登入" data-en="Sign in">會員登入</button>
+    <button type="button" class="ms-tab" data-ms-tab="register" data-zh="建立帳戶" data-en="Create account">建立帳戶</button>
+   </div>
+   <form id="ms-auth-form" class="ms-form">
+    <label class="ms-field full"><span data-zh="電子郵件" data-en="Email">電子郵件</span><input type="email" id="ms-email" autocomplete="email" required maxlength="254"></label>
+    <label class="ms-field ms-hidden" id="ms-name-wrap"><span data-zh="顯示名稱" data-en="Display name">顯示名稱</span><input type="text" id="ms-name" maxlength="80" autocomplete="name"></label>
+    <label class="ms-field full"><span data-zh="密碼（至少 14 個字元）" data-en="Password (at least 14 characters)">密碼（至少 14 個字元）</span><input type="password" id="ms-password" required minlength="14" maxlength="160" autocomplete="current-password"></label>
+    <div class="ms-field full"><button class="btn" id="ms-auth-submit" type="submit" data-zh="登入" data-en="Sign in">登入</button></div>
+   </form>
+   <div id="ms-auth-status" class="ms-status ms-hidden" aria-live="polite"></div>
+  </div>
+  <div id="ms-member" class="ms-hidden">
+   <div class="ms-toolbar"><div><span class="ms-badge" data-zh="已登入會員" data-en="SIGNED IN">已登入會員</span><h3 id="ms-welcome" style="margin:10px 0 3px"></h3><div id="ms-email-state" class="ms-muted"></div></div><button type="button" id="ms-logout" class="ms-small" data-zh="登出" data-en="Sign out">登出</button></div>
+   <div class="ms-card"><h3 data-zh="MorningStar Skill v3.0.0" data-en="MorningStar Skill v3.0.0">MorningStar Skill v3.0.0</h3><p class="ms-muted" data-zh="Claude Code 與 Codex 安裝套件，含六大推理引擎、基準測試工具、雙盲評分流程及安裝腳本。套件 SHA-256：e1739adbbdf6ecc5f9fe6a176118bca9adcb0164e62e048a901dff049633a038" data-en="Installable package for Claude Code and Codex, including six reasoning engines, benchmark tools, blind-scoring workflow, and installers. SHA-256: e1739adbbdf6ecc5f9fe6a176118bca9adcb0164e62e048a901dff049633a038">Claude Code 與 Codex 安裝套件，含六大推理引擎、基準測試工具、雙盲評分流程及安裝腳本。套件 SHA-256：e1739adbbdf6ecc5f9fe6a176118bca9adcb0164e62e048a901dff049633a038</p><div id="ms-product-state" class="ms-status">套件等待管理員上傳；完成後才會開放授權下載。</div><div id="ms-product-actions" class="ms-actions"></div></div>
+   <div class="ms-card"><h3 data-zh="授權申請" data-en="License request">授權申請</h3><p class="ms-muted" data-zh="個人／研究用途需經人工審核。商業授權目前尚未開放，原始作品 CC BY-NC-ND 4.0 權利不會因新增商業模組而自動改變。" data-en="Personal/research requests are manually reviewed. Commercial licensing is not yet open. The original CC BY-NC-ND 4.0 rights are not automatically changed by new commercial modules.">個人／研究用途需經人工審核。商業授權目前尚未開放，原始作品 CC BY-NC-ND 4.0 權利不會因新增商業模組而自動改變。</p>
+    <div class="ms-legal"><b data-zh="原始作品授權聲明" data-en="Original work license notice">原始作品授權聲明</b><br><span data-zh="《邏輯無間：晨星起源》及原始框架維持 CC BY-NC-ND 4.0 權利聲明。個人／研究授權不包含商業再散布或改作權。" data-en="The original work and framework remain under the CC BY-NC-ND 4.0 notice. Personal/research access does not grant commercial redistribution or adaptation rights.">《邏輯無間：晨星起源》及原始框架維持 CC BY-NC-ND 4.0 權利聲明。個人／研究授權不包含商業再散布或改作權。</span> <a href="https://creativecommons.org/licenses/by-nc-nd/4.0/" target="_blank" rel="noopener">CC BY-NC-ND 4.0</a></div>
+    <label class="ms-field full" style="margin-top:12px"><span data-zh="付款／聯絡參考（選填，請勿填寫卡號或密碼）" data-en="Payment/contact reference (optional; never enter card data or passwords)">付款／聯絡參考（選填，請勿填寫卡號或密碼）</span><input id="ms-payment-ref" maxlength="120"></label>
+    <label class="ms-field full" style="margin-top:10px"><span><input type="checkbox" id="ms-accept-personal"> <span data-zh="我已閱讀原始作品授權聲明，並理解這不是商業授權。" data-en="I have read the original license notice and understand this is not a commercial license.">我已閱讀原始作品授權聲明，並理解這不是商業授權。</span></span></label>
+    <button type="button" id="ms-request-license" class="btn" data-zh="提交個人／研究授權申請" data-en="Request personal/research license">提交個人／研究授權申請</button>
+    <div id="ms-order-status" class="ms-status ms-hidden"></div>
+   </div>
+   <div class="ms-card"><h3 data-zh="我的授權與訂單" data-en="My licenses & requests">我的授權與訂單</h3><div id="ms-licenses"></div><div id="ms-orders"></div></div>
+  </div>
+  <div id="ms-admin" class="ms-card ms-hidden">
+   <div class="ms-toolbar"><h3 data-zh="管理員控制台" data-en="Administrator console">管理員控制台</h3><span class="ms-badge">ADMIN</span></div>
+   <div id="ms-admin-status" class="ms-status"></div>
+   <div class="ms-card"><h3 data-zh="套件上傳（私有儲存）" data-en="Package upload (private storage)">套件上傳（私有儲存）</h3><p class="ms-muted" data-zh="僅管理員可上傳 ZIP。伺服器會核對 SHA-256；套件不會放入公開 GitHub 儲存庫。" data-en="Only administrators can upload ZIP files. The server verifies SHA-256; packages are not stored in the public GitHub repository.">僅管理員可上傳 ZIP。伺服器會核對 SHA-256；套件不會放入公開 GitHub 儲存庫。</p><input type="file" id="ms-package-file" accept=".zip,application/zip"><button type="button" class="ms-small" id="ms-package-upload" data-zh="安全上傳套件" data-en="Upload securely">安全上傳套件</button></div>
+   <div class="ms-card"><h3 data-zh="訂單審核" data-en="Order review">訂單審核</h3><div id="ms-admin-orders"></div></div>
+   <div class="ms-card"><h3 data-zh="會員電子郵件核驗" data-en="Member email verification">會員電子郵件核驗</h3><p class="ms-muted" data-zh="目前尚未設定郵件服務，因此採管理員人工核驗。核驗前不會核發授權。" data-en="Email delivery is not configured yet, so verification is manual. Licenses cannot be issued before verification.">目前尚未設定郵件服務，因此採管理員人工核驗。核驗前不會核發授權。</p><div id="ms-admin-users"></div></div>
+   <div class="ms-card"><h3 data-zh="商業授權啟用（需要權利範圍確認）" data-en="Enable commercial licensing (rights confirmation required)">商業授權啟用（需要權利範圍確認）</h3><p class="ms-muted ms-warn" data-zh="不得將 CC BY-NC-ND 原始作品自動納入商業授權。只有在你確認商業新增內容的權利歸屬、第三方素材授權與正式條款後，才可啟用。" data-en="Do not automatically include CC BY-NC-ND original materials in a commercial grant. Enable only after confirming rights in commercial additions, third-party licenses, and final terms.">不得將 CC BY-NC-ND 原始作品自動納入商業授權。只有在你確認商業新增內容的權利歸屬、第三方素材授權與正式條款後，才可啟用。</p>
+    <label class="ms-field full"><span data-zh="授權權利範圍（必填）" data-en="Rights scope (required)">授權權利範圍（必填）</span><textarea id="ms-rights-scope" placeholder="僅列出你有權授權的新增內容、排除項目與限制"></textarea></label>
+    <label class="ms-field full"><span data-zh="正式商業授權條款全文（必填，至少 500 字）" data-en="Final commercial license text (required, at least 500 characters)">正式商業授權條款全文（必填，至少 500 字）</span><textarea id="ms-commercial-terms"></textarea></label>
+    <label class="ms-field full"><span><input type="checkbox" id="ms-rights-confirm"> <span data-zh="我已確認有權授權上述新增內容，並已排除未獲商業授權的原始 CC BY-NC-ND 內容及第三方素材。" data-en="I confirm I control the rights to the listed additions and have excluded original CC BY-NC-ND content and third-party materials not authorized for commercial use.">我已確認有權授權上述新增內容，並已排除未獲商業授權的原始 CC BY-NC-ND 內容及第三方素材。</span></span></label>
+    <button type="button" id="ms-publish-commercial" class="ms-small" data-zh="提交正式條款並啟用商業申請" data-en="Publish terms and enable commercial requests">提交正式條款並啟用商業申請</button>
+   </div>
+  </div>
+  <div id="ms-bootstrap" class="ms-card ms-hidden">
+   <h3 data-zh="首次管理員初始化" data-en="First administrator setup">首次管理員初始化</h3>
+   <p class="ms-muted" data-zh="需先在 Cloudflare Worker Secrets 設定 ADMIN_BOOTSTRAP_TOKEN。此初始化只可成功一次。" data-en="Set ADMIN_BOOTSTRAP_TOKEN in Cloudflare Worker Secrets first. This setup can only succeed once.">需先在 Cloudflare Worker Secrets 設定 ADMIN_BOOTSTRAP_TOKEN。此初始化只可成功一次。</p>
+   <form id="ms-bootstrap-form" class="ms-form">
+    <label class="ms-field full"><span data-zh="初始化 Token" data-en="Bootstrap token">初始化 Token</span><input type="password" id="ms-bootstrap-token" required></label>
+    <label class="ms-field"><span data-zh="管理員電子郵件" data-en="Administrator email">管理員電子郵件</span><input type="email" id="ms-bootstrap-email" required></label>
+    <label class="ms-field"><span data-zh="管理員名稱" data-en="Administrator name">管理員名稱</span><input id="ms-bootstrap-name" required maxlength="80"></label>
+    <label class="ms-field full"><span data-zh="管理員密碼（至少 14 個字元）" data-en="Administrator password (14+ characters)">管理員密碼（至少 14 個字元）</span><input type="password" id="ms-bootstrap-password" minlength="14" required></label>
+    <button type="submit" class="btn" data-zh="初始化唯一管理員帳戶" data-en="Create first administrator">初始化唯一管理員帳戶</button>
+   </form>
+   <div id="ms-bootstrap-status" class="ms-status ms-hidden"></div>
+  </div>
+  <div id="ms-global-status" class="ms-status ms-hidden" aria-live="polite"></div>
+ </div>
+</section>
 </main>
 <footer><div class="brand"><span class="mark">◈</span><span><b>MORNINGSTAR AI</b><small>LOGIC BEYOND LEARNING</small></span></div><p data-zh="晨星 AI 官方研究與技術平台。所有實驗結果以公開原始資料與方法為準。" data-en="Official research and technology platform. Experimental claims should be evaluated against published source data and methods.">晨星 AI 官方研究與技術平台。所有實驗結果以公開原始資料與方法為準。</p><span>© 2026 MORNINGSTAR AI · SITE v0.1.1 · GITHUB MAIN</span></footer>
 <script>
 let language='zh', selected=null;
 const langBtn=document.getElementById('lang');
-function setLanguage(next){language=next;document.documentElement.lang=next==='zh'?'zh-Hant':'en';document.querySelectorAll('[data-zh]').forEach(el=>{const value=el.getAttribute('data-'+next);if(value!==null)el.textContent=value});langBtn.textContent=next==='zh'?'EN':'繁中'}
+function setLanguage(next){language=next;window.msLanguage=next;document.documentElement.lang=next==='zh'?'zh-Hant':'en';document.querySelectorAll('[data-zh]').forEach(el=>{const value=el.getAttribute('data-'+next);if(value!==null)el.textContent=value});langBtn.textContent=next==='zh'?'EN':'繁中'}
 langBtn.addEventListener('click',()=>setLanguage(language==='zh'?'en':'zh'));
 document.getElementById('theme').addEventListener('click',()=>document.body.classList.toggle('blue'));
 document.getElementById('menu').addEventListener('click',()=>document.getElementById('nav').classList.toggle('open'));
 document.querySelectorAll('.nav a').forEach(a=>a.addEventListener('click',()=>document.getElementById('nav').classList.remove('open')));
 document.querySelectorAll('.choice').forEach(b=>b.addEventListener('click',()=>{selected=b.dataset.answer;document.querySelectorAll('.choice').forEach(x=>x.classList.toggle('sel',x===b));document.getElementById('feedback').textContent=''}));
 document.getElementById('check').addEventListener('click',()=>{const f=document.getElementById('feedback');if(selected===null){f.className='feedback';f.textContent=language==='zh'?'請先選擇一個答案。':'Please select an answer first.';return}f.className='feedback';f.textContent=selected==='0'?(language==='zh'?'符合給定規則。這只驗證本題的形式邏輯，不代表完整模型能力。':'This follows from the given rule. It validates only this exercise, not overall model capability.'):(language==='zh'?'此選項無法由題目規則必然推出。請回到前提重新檢查。':'This option does not necessarily follow from the stated rule. Recheck the premises.')});
+
+window.msLanguage='zh';
+(function(){
+ const $=id=>document.getElementById(id);
+ let mode='login', current=null;
+ const tr=(zh,en)=>document.documentElement.lang==='en'?en:zh;
+ function say(el,msg,kind){if(!el)return;el.textContent=msg;el.classList.remove('ms-hidden','ms-ok','ms-warn','ms-error');if(kind)el.classList.add(kind)}
+ function hide(el){if(el)el.classList.add('ms-hidden')}
+ function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+ async function api(path,body,method){
+  const opts={method:method|| (body?'POST':'GET'),credentials:'same-origin',headers:{}};
+  if(body!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body)}
+  const r=await fetch(path,opts);let data={};try{data=await r.json()}catch(e){}
+  if(!r.ok)throw new Error(data.error||('HTTP '+r.status));
+  return data;
+ }
+ function authStatus(msg,kind){say($('ms-auth-status'),msg,kind)}
+ function selectMode(m){
+  mode=m;
+  document.querySelectorAll('[data-ms-tab]').forEach(b=>b.classList.toggle('active',b.dataset.msTab===m));
+  $('ms-name-wrap').classList.toggle('ms-hidden',m!=='register');
+  $('ms-auth-submit').textContent=tr(m==='login'?'登入':'建立帳戶',m==='login'?'Sign in':'Create account');
+  $('ms-password').setAttribute('autocomplete',m==='login'?'current-password':'new-password');
+  hide($('ms-auth-status'));
+ }
+ document.querySelectorAll('[data-ms-tab]').forEach(b=>b.addEventListener('click',()=>selectMode(b.dataset.msTab)));
+ $('ms-auth-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const body={email:$('ms-email').value,password:$('ms-password').value};
+  try{
+   const data=await api('/api/auth/'+mode,mode==='register'?{...body,display_name:$('ms-name').value}:body);
+   current=data.user;await loadMember();
+   $('ms-password').value='';
+   authStatus(tr('登入成功。','Signed in successfully.'),'ms-ok');
+  }catch(err){authStatus(err.message,'ms-error')}
+ });
+ $('ms-logout').addEventListener('click',async()=>{try{await api('/api/auth/logout',{});current=null;await refresh()}catch(e){globalStatus(e.message,'ms-error')}});
+ function globalStatus(msg,kind){say($('ms-global-status'),msg,kind)}
+ async function loadMember(){
+  const d=await api('/api/me');
+  current=d.user;
+  $('ms-auth').classList.add('ms-hidden');$('ms-member').classList.remove('ms-hidden');
+  $('ms-welcome').textContent=d.user.display_name;
+  $('ms-email-state').textContent=d.user.email+' · '+(d.user.email_verified?tr('電子郵件已核驗','Email verified'):tr('電子郵件待人工核驗','Email pending manual verification'));
+  if(d.user.email_verified){$('ms-email-state').classList.add('ms-ok')}else{$('ms-email-state').classList.add('ms-warn')}
+  $('ms-product-state').textContent=d.product.file_ready?tr('套件檔案已安全存放。下載需具備有效授權。','Package is stored privately. A valid license is required to download.'):tr('套件尚未上傳，需管理員先完成私有檔案上傳。','Package upload is pending administrator action.');
+  $('ms-product-actions').innerHTML='<span class="ms-badge">v'+esc(d.product.version)+'</span>';
+  const licenses=d.licenses||[];
+  $('ms-licenses').innerHTML=licenses.length?licenses.map(x=>'<div class="ms-row"><div><b>'+esc(x.license_type)+'</b><div class="ms-muted">'+esc(x.license_key_prefix)+' · '+esc(x.status)+'</div></div><span class="ms-badge">'+esc(x.product_version)+'</span></div>').join(''):'<p class="ms-muted">'+tr('目前沒有已核准授權。','No approved licenses yet.')+'</p>';
+  const orders=d.orders||[];
+  $('ms-orders').innerHTML=orders.length?'<table class="ms-table"><thead><tr><th>'+tr('申請日期','DATE')+'</th><th>'+tr('授權類型','TYPE')+'</th><th>'+tr('狀態','STATUS')+'</th></tr></thead><tbody>'+orders.map(x=>'<tr><td>'+esc(x.created_at.slice(0,10))+'</td><td>'+esc(x.requested_license_type)+'</td><td>'+esc(x.status)+'</td></tr>').join('')+'</tbody></table>':'<p class="ms-muted">'+tr('尚無申請紀錄。','No requests yet.')+'</p>';
+  $('ms-request-license').disabled=!d.user.email_verified;
+  $('ms-request-license').textContent=d.user.email_verified?tr('提交個人／研究授權申請','Request personal/research license'):tr('等待電子郵件核驗後申請','Verify email before requesting');
+  if(d.user.role==='admin'){ $('ms-admin').classList.remove('ms-hidden'); await loadAdmin(); }
+  else $('ms-admin').classList.add('ms-hidden');
+  hide($('ms-auth'));hide($('ms-bootstrap'));
+ }
+ async function refresh(){
+  hide($('ms-member'));hide($('ms-admin'));hide($('ms-bootstrap'));$('ms-auth').classList.remove('ms-hidden');
+  try{await loadMember()}catch(e){current=null;selectMode('login')}
+  try{const s=await api('/api/setup-status');if(s.needs_admin){$('ms-bootstrap').classList.remove('ms-hidden')}}catch(e){}
+ }
+ $('ms-request-license').addEventListener('click',async()=>{
+  if(!$('ms-accept-personal').checked){say($('ms-order-status'),tr('請先閱讀並同意原始作品授權聲明。','Please accept the original-work license notice first.'),'ms-warn');return}
+  try{const d=await api('/api/orders',{product_id:'morningstar-skill-v3',license_type:'personal_research',terms_version:'ms-original-license-v3',payment_reference:$('ms-payment-ref').value.trim()});say($('ms-order-status'),tr('申請已送出，訂單編號：','Request submitted. Order ID: ')+d.order_id,'ms-ok');await loadMember()}
+  catch(e){say($('ms-order-status'),e.message,'ms-error')}
+ });
+ $('ms-bootstrap-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  try{
+   const body={email:$('ms-bootstrap-email').value,display_name:$('ms-bootstrap-name').value,password:$('ms-bootstrap-password').value};
+   const r=await fetch('/api/admin/bootstrap',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Admin-Bootstrap':$('ms-bootstrap-token').value},body:JSON.stringify(body)});
+   const d=await r.json();if(!r.ok)throw new Error(d.error||'Bootstrap failed');
+   say($('ms-bootstrap-status'),tr('管理員已初始化。請妥善保管帳戶密碼。','Administrator initialized. Keep the account password secure.'),'ms-ok');await loadMember()
+  }catch(e){say($('ms-bootstrap-status'),e.message,'ms-error')}
+ });
+ async function loadAdmin(){
+  const d=await api('/api/admin/overview');
+  say($('ms-admin-status'),tr('管理員模式已啟用。此處所有授權與會員操作都會寫入稽核紀錄。','Administrator mode is active. Membership and license actions are written to the audit log.'),'ms-ok');
+  $('ms-admin-orders').innerHTML=(d.orders||[]).map(o=>'<div class="ms-row"><div><b>'+esc(o.email)+'</b><div class="ms-muted">'+esc(o.requested_license_type)+' · '+esc(o.id)+'</div><div class="ms-muted">'+esc(o.status)+' · '+(o.email_verified?'verified':'email pending')+'</div></div><div class="ms-actions">'+(o.status==='pending_review'?'<button class="ms-small" data-ms-approve="'+esc(o.id)+'">'+tr('核准','Approve')+'</button><button class="ms-small" data-ms-reject="'+esc(o.id)+'">'+tr('拒絕','Reject')+'</button>':'')+'</div></div>').join('')||'<p class="ms-muted">No requests.</p>';
+  $('ms-admin-users').innerHTML=(d.users||[]).map(u=>'<div class="ms-row"><div><b>'+esc(u.email)+'</b><div class="ms-muted">'+esc(u.display_name)+' · '+esc(u.role)+'</div></div>'+(u.email_verified?' <span class="ms-badge">VERIFIED</span>':'<button class="ms-small" data-ms-verify="'+esc(u.id)+'">'+tr('人工核驗','Verify manually')+'</button>')+'</div>').join('');
+  document.querySelectorAll('[data-ms-approve]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm(tr('核准此申請並核發授權？','Approve and issue a license?')))return;try{const r=await api('/api/admin/orders/'+b.dataset.msApprove+'/approve',{});globalStatus(tr('已核准。授權金鑰只顯示一次，請安全保存：','Approved. License key shown once; save securely: ')+r.license_key,'ms-ok');await loadMember()}catch(e){globalStatus(e.message,'ms-error')}}));
+  document.querySelectorAll('[data-ms-reject]').forEach(b=>b.addEventListener('click',async()=>{const note=prompt(tr('拒絕原因（會寫入稽核紀錄）','Reason for rejection (audited)'));if(note===null)return;try{await api('/api/admin/orders/'+b.dataset.msReject+'/reject',{note});await loadAdmin()}catch(e){globalStatus(e.message,'ms-error')}}));
+  document.querySelectorAll('[data-ms-verify]').forEach(b=>b.addEventListener('click',async()=>{if(!confirm(tr('已透過可信管道核實此會員電子郵件？','Have you verified this member email through a trusted channel?')))return;try{await api('/api/admin/users/'+b.dataset.msVerify+'/verify-email',{});await loadAdmin()}catch(e){globalStatus(e.message,'ms-error')}}));
+ }
+ $('ms-package-upload').addEventListener('click',async()=>{
+  const f=$('ms-package-file').files[0];if(!f){globalStatus(tr('請先選擇 ZIP 檔。','Select a ZIP file first.'),'ms-warn');return}
+  if(f.size>1024*1024){globalStatus(tr('檔案超過 1 MB 管理上傳上限。','File exceeds the 1 MB upload limit.'),'ms-error');return}
+  try{
+   const buf=await f.arrayBuffer();const bytes=new Uint8Array(buf);let bin='';for(let i=0;i<bytes.length;i+=0x8000)bin+=String.fromCharCode(...bytes.subarray(i,i+0x8000));
+   const b64=btoa(bin);const digest=await crypto.subtle.digest('SHA-256',buf);const hash=Array.from(new Uint8Array(digest)).map(x=>x.toString(16).padStart(2,'0')).join('');
+   await api('/api/admin/artifacts/upload',{product_id:'morningstar-skill-v3',file_name:f.name,content_base64:b64,sha256:hash});
+   globalStatus(tr('套件已上傳並完成 SHA-256 驗證。','Package uploaded and SHA-256 verified.'),'ms-ok');await loadMember()
+  }catch(e){globalStatus(e.message,'ms-error')}
+ });
+ $('ms-publish-commercial').addEventListener('click',async()=>{
+  const rights=$('ms-rights-scope').value,terms=$('ms-commercial-terms').value;
+  if(!$('ms-rights-confirm').checked){globalStatus(tr('請先確認權利範圍與排除項目。','Confirm rights ownership and exclusions first.'),'ms-warn');return}
+  if(!confirm(tr('這會發布你提供的條款並開啟商業授權申請。你已確認權利範圍嗎？','This publishes the submitted terms and enables commercial license requests. Have you confirmed the rights scope?')))return;
+  try{await api('/api/admin/commercial/publish',{rights_scope:rights,terms_body:terms,terms_version:'commercial-1.0',confirmation:true});globalStatus(tr('商業條款已發布，商業申請已開啟。請在正式交易前完成法律審閱。','Commercial terms published and requests enabled. Complete legal review before transactions.'),'ms-ok');await loadAdmin()}catch(e){globalStatus(e.message,'ms-error')}
+ });
+ refresh();
+})();
+
 </script>
 </body></html>

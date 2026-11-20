@@ -1,0 +1,22 @@
+{
+  "$schema": "https://developers.cloudflare.com/workers/wrangler/config-schema.json",
+  "name": "morningstar-ai-official-site",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-20",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "morningstar-membership",
+      "database_id": "028ea21c-486b-47af-8fec-b929d81f7045"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": true, "persist": true }
+  }
+}
