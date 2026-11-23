@@ -62,3 +62,8 @@ This passing candidate is an **asset-upload bypass for isolated acceptance**, no
 - PR #1 remains open, draft, and unmerged.
 - No member, order, payment, or license test records were created.
 - The earlier production, v22, and v23 failure records above are retained as historical results; they are not overwritten by this isolated candidate pass.
+
+
+### Reproducibility artifact
+
+The exact deployed isolated candidate Worker module was also committed to this RC branch at `release-candidate/v3.1.1/rc-acceptance-worker.js`. It embeds the homepage HTML and contains the D1-backed anonymous download handler used by candidate version 3. This source snapshot is an acceptance harness, not the production static-assets build.
