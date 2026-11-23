@@ -85,14 +85,24 @@ section{padding:88px 9vw;border-top:1px solid #ffffff0d}.head{display:flex;justi
 <div class="panel test"><div class="mono">LOGIC / DEMO_001</div><h3 data-zh="規則一致性" data-en="Rule consistency">規則一致性</h3><p class="copy" data-zh="規則：所有 A 都是 B。已知 x 是 A。下列哪個結論必然成立？" data-en="Rule: All A are B. Given x is A. Which conclusion must be true?">規則：所有 A 都是 B。已知 x 是 A。下列哪個結論必然成立？</p>
 <button class="choice" data-answer="0"><b>A</b><span data-zh="x 是 B" data-en="x is B">x 是 B</span></button><button class="choice" data-answer="1"><b>B</b><span data-zh="所有 B 都是 A" data-en="All B are A">所有 B 都是 A</span></button><button class="choice" data-answer="2"><b>C</b><span data-zh="x 不是 B" data-en="x is not B">x 不是 B</span></button>
 <button class="btn" id="check" data-zh="檢查答案" data-en="Check answer">檢查答案</button><div id="feedback" aria-live="polite"></div><p class="mono" style="margin-bottom:0" data-zh="示範模式｜規則式回饋，非模型 API" data-en="DEMO MODE | RULE-BASED FEEDBACK, NOT A MODEL API">示範模式｜規則式回饋，非模型 API</p></div></section>
-<section id="membership"><div class="kicker">07 / ACCESS CONTROL</div><h2 data-zh="會員與授權管理" data-en="Membership & Licensing">會員與授權管理</h2><p class="sub" data-zh="目前先提供產品存取與授權制度的資訊架構。真正的登入、付款、金鑰簽發及權限控管需由安全的伺服器端服務完成。" data-en="This section outlines future product access and licensing. Real authentication, payments, key issuance, and access control require secure server-side services.">目前先提供產品存取與授權制度的資訊架構。</p>
+<section id="membership"><div class="kicker">07 / ACCESS CONTROL</div><h2 data-zh="會員與授權管理" data-en="Membership & Licensing">會員與授權管理</h2><p class="sub" data-zh="會員區提供帳戶登入、會員資料、授權申請與管理介面。電子郵件核驗及訂單／授權審核目前由管理員人工處理；v3.1.0 免費公開版另設免登入下載入口。" data-en="Membership supports account access, member details, license requests and administration. Email verification and order/license reviews are currently handled manually by an administrator. The v3.1.0 free edition has a separate no-login download route.">會員區提供帳戶登入、會員資料、授權申請與管理介面。電子郵件核驗及訂單／授權審核目前由管理員人工處理；v3.1.0 免費公開版另設免登入下載入口。</p>
 <div class="cols"><div class="panel"><b data-zh="規劃中的會員功能" data-en="Planned membership features">規劃中的會員功能</b><div class="row"><span>01</span><b data-zh="帳戶登入與電子郵件驗證" data-en="Account login and email verification">帳戶登入與電子郵件驗證</b></div><div class="row"><span>02</span><b data-zh="個人授權與裝置管理" data-en="Personal licenses and device management">個人授權與裝置管理</b></div><div class="row"><span>03</span><b data-zh="訂單與發票紀錄" data-en="Orders and invoice history">訂單與發票紀錄</b></div><div class="row"><span>04</span><b data-zh="授權金鑰簽發／撤銷" data-en="License key issuance and revocation">授權金鑰簽發／撤銷</b></div><div class="row"><span>05</span><b data-zh="管理員稽核紀錄" data-en="Administrator audit log">管理員稽核紀錄</b></div></div><div class="security"><strong data-zh="安全邊界" data-en="Security boundary">安全邊界</strong><p class="copy" data-zh="不要將密碼、付款資料、私鑰或授權秘密寫入前端程式碼、Git 儲存庫或公開 JSON。正式啟用前需完成後端、隱私政策與安全測試。" data-en="Never place passwords, payment data, private keys, or license secrets in frontend code, Git repositories, or public JSON. Backend, privacy policy, and security testing are required before launch.">不要將密碼、付款資料、私鑰或授權秘密寫入前端程式碼、Git 儲存庫或公開 JSON。</p></div></div></section>
 
 <section id="account">
  <div class="kicker">08 / MEMBER & LICENSE PORTAL</div>
  <h2 data-zh="會員、授權與安全下載" data-en="Membership, Licensing & Secure Downloads">會員、授權與安全下載</h2>
- <p class="sub" data-zh="建立帳戶後，可查看會員狀態、提交授權申請，並在授權核准後下載 MorningStar Skill。所有檔案都經伺服器端會員與授權檢查，不使用公開下載連結。" data-en="Create an account to manage membership, request a license, and download MorningStar Skill after approval. Downloads are protected by server-side account and license checks, not public file links.">建立帳戶後，可查看會員狀態、提交授權申請，並在授權核准後下載 MorningStar Skill。所有檔案都經伺服器端會員與授權檢查，不使用公開下載連結。</p>
- <div class="ms-shell">
+ <p class="sub" data-zh="會員帳戶與授權管理用於 v3.0.0 會員授權產品。v3.1.0 免費公開版則可直接免登入下載；兩項產品、下載規則與授權資料分開管理。" data-en="Member accounts and licensing manage the v3.0.0 licensed product. The v3.1.0 free public edition can be downloaded without signing in; product records, download rules and licenses remain separate.">會員帳戶與授權管理用於 v3.0.0 會員授權產品。v3.1.0 免費公開版則可直接免登入下載；兩項產品、下載規則與授權資料分開管理。</p>
+ <div class="ms-card" id="ms-free-v310">
+  <div class="ms-row"><h3>MorningStar Skill v3.1.0 免費公開版</h3><span class="ms-badge">FREE PUBLIC EDITION</span></div>
+  <p class="ms-muted">免費公開版，無須登入或申請會員授權。它與 v3.0.0 商業授權產品分開管理，不會變更舊版訂單、授權或稽核資料。</p>
+  <div class="ms-actions">
+    <a class="btn" href="/api/public-download/morningstar-skill-v3-1-0-free">免費下載 SKILL.md ↗</a>
+    <a class="ms-small" href="https://github.com/morningstarkalis/morningstar-ai-official-site/blob/main/skills/morningstar-skill-v3.1.0/SKILL.md" target="_blank" rel="noopener noreferrer">檢視 v3.1.0 原始碼</a>
+  </div>
+  <p class="ms-muted">SHA-256: d5405cb7e55a7ff99e67089b3da52f24d7dea27df7513d8bba9cc7a7adeb3e3</p>
+  <p class="ms-muted">新版本內容在發布者可控制權利範圍內採 CC BY 4.0；v2.1.0、AC-01 及第三方素材仍依各自授權。</p>
+</div>
+<div class="ms-shell">
   <div id="ms-auth">
    <div class="ms-tabs">
     <button type="button" class="ms-tab active" data-ms-tab="login" data-zh="會員登入" data-en="Sign in">會員登入</button>
