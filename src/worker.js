@@ -100,6 +100,26 @@ async function handle(request, env) {
   if (method === "POST" && !originValid(request)) return fail(403, "Origin check failed");
   if (!env.DB) return fail(503, "會員資料庫尚未綁定 / D1 database binding missing");
 
+  if (path === "/api/public-download/morningstar-skill-v3-1-1-ncnd" && method === "GET") {
+    const artifact = await env.DB.prepare("SELECT p.file_name,p.file_size,p.original_sha256,a.content_base64,a.sha256 FROM products p JOIN product_artifacts a ON a.product_id=p.id WHERE p.id=? AND p.version='3.1.1' AND p.status='available'").bind("morningstar-skill-v3-1-1-ncnd").first();
+    if (!artifact) return fail(404, "v3.1.1 免費公開版本不存在 / Free public release not found");
+    const binary = Uint8Array.from(atob(artifact.content_base64), c => c.charCodeAt(0));
+    if (binary.byteLength !== Number(artifact.file_size)) return fail(500, "檔案大小驗證失敗 / Artifact size verification failed");
+    const actualHash = await digestBytes(binary);
+    if (!same(actualHash, artifact.sha256) || !same(actualHash, artifact.original_sha256)) return fail(500, "檔案雜湊驗證失敗 / Artifact checksum verification failed");
+    return new Response(binary, { status: 200, headers: {
+      "Content-Type": "text/markdown; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="' + artifact.file_name.replace(/[^A-Za-z0-9._-]/g, "_") + '"',
+      "Content-Length": String(binary.byteLength),
+      "Cache-Control": "public, max-age=300",
+      "ETag": '"' + actualHash + '"',
+      "X-Content-SHA256": actualHash,
+      "X-MorningStar-Version": "3.1.1",
+      "X-MorningStar-License": "CC-BY-NC-ND-4.0",
+      "X-Content-Type-Options": "nosniff"
+    }});
+  }
+
   if (path === "/api/public-download/morningstar-skill-v3-1-0-free" && method === "GET") {
     const artifact = await env.DB.prepare("SELECT p.file_name,p.file_size,p.original_sha256,a.content_base64,a.sha256 FROM products p JOIN product_artifacts a ON a.product_id=p.id WHERE p.id=? AND p.version='3.1.0' AND p.status='available'").bind("morningstar-skill-v3-1-0-free").first();
     if (!artifact) return fail(404, "免費公開版本不存在 / Free public release not found");
