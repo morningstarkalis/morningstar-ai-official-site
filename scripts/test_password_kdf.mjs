@@ -8,7 +8,7 @@ const password = "MorningStar-Test-Password-2026!";
 
 const hashA = await hashPassword(password, saltA);
 const hashB = await hashPassword(password, saltB);
-assert.match(hashA, /^scrypt\\$v1\\$N=16384,r=8,p=5\\$[0-9a-f]{64}$/);
+assert.match(hashA, /^scrypt\$v1\$N=16384,r=8,p=5\$[0-9a-f]{64}$/);
 assert.notEqual(hashA, hashB, "different salts must produce different hashes");
 
 const correct = await verifyPassword(password, saltA, hashA, 0);
