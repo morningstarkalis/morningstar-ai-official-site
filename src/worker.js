@@ -245,6 +245,55 @@ async function handle(request, env) {
   }
 
 
+
+  const rightsAssetsMatch = path.match(/^\/api\/admin\/skill\/releases\/([A-Za-z0-9._-]{1,40})\/rights-assets$/);
+  if (rightsAssetsMatch && method === "GET") {
+    await requireAdminMfa(request,env);
+    const version = rightsAssetsMatch[1];
+    const assets = rows(await env.DB.prepare("SELECT id,asset_path,asset_sha256,creator,rights_basis,third_party,third_party_license,commercial_use_allowed,redistribution_allowed,evidence_reference,included_in_package,status,review_note FROM commercial_rights_assets WHERE product_version=? ORDER BY asset_path").bind(version).all());
+    return json({version,assets});
+  }
+
+  const rightsAssetReviewMatch = path.match(/^\/api\/admin\/skill\/rights-assets\/([A-Za-z0-9._-]{1,120})\/review$/);
+  if (rightsAssetReviewMatch && method === "POST") {
+    const admin = await requireAdminMfa(request,env), b = await bodyJson(request,12000), id = rightsAssetReviewMatch[1];
+    const status = String(b.status || ""), basis = String(b.rights_basis || ""), evidence = String(b.evidence_reference || "").trim(), note = String(b.review_note || "").trim();
+    const asset = await env.DB.prepare("SELECT * FROM commercial_rights_assets WHERE id=?").bind(id).first();
+    if (!asset) return fail(404,"Rights asset record not found");
+    if (status === "approved") {
+      if (!["original_author","assignment","separate_license","public_domain","open_source"].includes(basis)) return fail(400,"A resolved rights basis is required");
+      if (evidence.length < 8 || note.length < 20 || b.redistribution_allowed !== true) return fail(400,"Approval requires provenance evidence, a review note and redistribution permission");
+      if (Number(b.third_party) === 1 && !String(b.third_party_license || "").trim()) return fail(400,"Third-party assets require an exact license reference");
+      await env.DB.prepare("UPDATE commercial_rights_assets SET rights_basis=?,third_party=?,third_party_license=?,commercial_use_allowed=?,redistribution_allowed=1,status='approved',review_note=?,reviewed_by=?,reviewed_at=? WHERE id=?")
+        .bind(basis, b.third_party === true ? 1 : 0, String(b.third_party_license || "").trim() || null, b.commercial_use_allowed === true ? 1 : 0, note + "\nEvidence: " + evidence, admin.id, nowIso(), id).run();
+    } else if (status === "excluded") {
+      if (note.length < 20 || evidence.length < 8) return fail(400,"Exclusion requires a reason and evidence reference");
+      await env.DB.prepare("UPDATE commercial_rights_assets SET included_in_package=0,status='excluded',review_note=?,reviewed_by=?,reviewed_at=? WHERE id=?")
+        .bind(note + "\nEvidence: " + evidence,admin.id,nowIso(),id).run();
+    } else if (status === "rejected") {
+      if (note.length < 20 || evidence.length < 8) return fail(400,"Rejection requires a reason and evidence reference");
+      await env.DB.prepare("UPDATE commercial_rights_assets SET status='rejected',review_note=?,reviewed_by=?,reviewed_at=? WHERE id=?")
+        .bind(note + "\nEvidence: " + evidence,admin.id,nowIso(),id).run();
+    } else return fail(400,"Status must be approved, excluded or rejected");
+    await audit(env,admin.id,"skill.rights_asset.reviewed","rights_asset",id,{status,rights_basis:basis,evidence_reference:evidence});
+    return json({ok:true,id,status});
+  }
+
+  if (path === "/api/admin/skill/rights-review" && method === "POST") {
+    const admin = await requireAdminMfa(request,env), b = await bodyJson(request,12000);
+    const version = String(b.version || ""), sha = String(b.package_sha256 || "").toLowerCase(), note = String(b.review_note || "").trim(), evidence = String(b.external_review_reference || "").trim();
+    const release = await env.DB.prepare("SELECT sha256,status FROM skill_releases WHERE version=?").bind(version).first();
+    if (!release || release.status !== "candidate" || release.sha256 !== sha) return fail(409,"Rights review must target the exact candidate package SHA-256");
+    if (note.length < 40 || evidence.length < 8) return fail(400,"Record the review basis and a durable external review evidence reference");
+    const summary = await env.DB.prepare("SELECT COUNT(*) AS total,SUM(CASE WHEN included_in_package=1 THEN 1 ELSE 0 END) AS included,SUM(CASE WHEN included_in_package=1 AND status='approved' AND redistribution_allowed=1 THEN 1 ELSE 0 END) AS approved FROM commercial_rights_assets WHERE product_version=?").bind(version).first();
+    const included = Number(summary.included || 0), approved = Number(summary.approved || 0), manifestCount = Number(b.manifest_file_count);
+    if (!included || included !== approved || manifestCount !== included) return fail(409,"Every included package file must have approved redistribution rights; manifest count must match");
+    await env.DB.prepare("INSERT INTO commercial_rights_reviews (id,product_id,product_version,package_sha256,manifest_file_count,approved_asset_count,status,reviewer_user_id,review_note,created_at) VALUES (?,?,?,?,?,?,'approved',?,?,?)")
+      .bind(crypto.randomUUID(),"morningstar-skill-public-rc7",version,sha,manifestCount,approved,admin.id,note + "\nExternal evidence: " + evidence,nowIso()).run();
+    await audit(env,admin.id,"skill.rights_review.approved","skill_release",version,{sha256:sha,manifest_file_count:manifestCount,evidence_reference:evidence});
+    return json({ok:true,version,package_sha256:sha,manifest_file_count:manifestCount,approved_asset_count:approved});
+  }
+
   // Release metadata is public; publishing requires exact-package evidence and MFA.
   const skillAssetMatch = path.match(/^\/api\/admin\/skill\/releases\/([A-Za-z0-9._-]{1,40})\/asset$/);
   if (skillAssetMatch && method === "POST") {
