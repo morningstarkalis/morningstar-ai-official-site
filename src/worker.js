@@ -246,11 +246,11 @@ async function handle(request, env) {
 
 
   // Release metadata is public; publishing requires exact-package evidence and MFA.
-  const skillAssetMatch = path.match(/^\\/api\\/admin\\/skill\\/releases\\/([A-Za-z0-9._-]{1,40})\\/asset$/);
+  const skillAssetMatch = path.match(/^\/api\/admin\/skill\/releases\/([A-Za-z0-9._-]{1,40})\/asset$/);
   if (skillAssetMatch && method === "POST") {
     const admin = await requireAdminMfa(request,env), b = await bodyJson(request,12000);
     const version = skillAssetMatch[1], filePath = String(b.file_path || "");
-    if (!/^\\/releases\\/skill\\/[A-Za-z0-9._-]+\\.zip$/.test(filePath)) return fail(400,"Asset path must be under /releases/skill/ and end in .zip");
+    if (!/^\/releases\/skill\/[A-Za-z0-9._-]+\\.zip$/.test(filePath)) return fail(400,"Asset path must be under /releases/skill/ and end in .zip");
     const release = await env.DB.prepare("SELECT version,sha256,status FROM skill_releases WHERE version=?").bind(version).first();
     if (!release || release.status !== "candidate") return fail(404,"Candidate Skill release not found");
     const asset = await env.ASSETS.fetch(new Request(new URL(filePath,url.origin).toString()));
@@ -262,7 +262,7 @@ async function handle(request, env) {
     return json({ok:true,version,file_path:filePath,sha256:release.sha256});
   }
 
-  const skillGateMatch = path.match(/^\\/api\\/admin\\/skill\\/releases\\/([A-Za-z0-9._-]{1,40})\\/gates$/);
+  const skillGateMatch = path.match(/^\/api\/admin\/skill\/releases\/([A-Za-z0-9._-]{1,40})\/gates$/);
   if (skillGateMatch && method === "POST") {
     const admin = await requireAdminMfa(request,env), b = await bodyJson(request,12000), version = skillGateMatch[1];
     const gateType = String(b.gate_type || ""), evidence = String(b.evidence_reference || "").trim(), note = String(b.review_note || "").trim();
@@ -281,7 +281,7 @@ async function handle(request, env) {
     return json({ok:true,version,gate_type:gateType});
   }
 
-  const skillPublishMatch = path.match(/^\\/api\\/admin\\/skill\\/releases\\/([A-Za-z0-9._-]{1,40})\\/publish$/);
+  const skillPublishMatch = path.match(/^\/api\/admin\/skill\/releases\/([A-Za-z0-9._-]{1,40})\/publish$/);
   if (skillPublishMatch && method === "POST") {
     const admin = await requireAdminMfa(request,env), version = skillPublishMatch[1];
     const release = await env.DB.prepare("SELECT version,file_path,sha256,status FROM skill_releases WHERE version=?").bind(version).first();
