@@ -1,6 +1,10 @@
 const SESSION_COOKIE = "__Host-ms_session";
-const PBKDF2_ITERATIONS = 31000;
-const SESSION_DAYS = 30;
+const MODEL_SESSION_COOKIE = "__Host-ms_model_session";
+const PBKDF2_ITERATIONS = 600000;
+const SESSION_DAYS = 1;
+const MODEL_SESSION_HOURS = 12;
+const MAX_MODEL_API_BODY = 65536;
+const MAX_MODEL_ARTIFACT_BYTES = 25 * 1024 * 1024;
 const enc = new TextEncoder();
 
 function json(data, status = 200, headers = {}) {
@@ -49,7 +53,7 @@ async function bodyJson(request, max = 30000) {
   if (!ct.toLowerCase().includes("application/json")) throw new Error("Content-Type must be application/json");
   const text = await request.text();
   if (text.length > max) throw new Error("Request body too large");
-  return JSON.parse(text || "{}");
+  try { return JSON.parse(text || "{}"); } catch (_) { throw Object.assign(new Error("Invalid JSON body"), { status: 400 }); }
 }
 function cleanEmail(value) { return String(value || "").trim().toLowerCase(); }
 function validEmail(value) { return value.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value); }
@@ -84,6 +88,21 @@ async function requireAdmin(request, env) {
   if (user.role !== "admin") throw Object.assign(new Error("管理員權限不足 / Administrator access required"), { status: 403 });
   return user;
 }
+
+function modelSessionCookie(value,maxAge){return MODEL_SESSION_COOKIE+"="+(value||"")+"; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age="+maxAge;}
+async function createModelSession(env,id){const token=randomToken(32),hash=await digest(token),expiry=new Date(Date.now()+MODEL_SESSION_HOURS*3600000).toISOString(),now=nowIso();await env.DB.prepare("INSERT INTO model_sessions (token_hash,model_member_id,expires_at,created_at,last_seen_at) VALUES (?,?,?,?,?)").bind(hash,id,expiry,now,now).run();return{token,expiry};}
+async function getModelMember(request,env){const token=cookie(request,MODEL_SESSION_COOKIE);if(!token)return null;return await env.DB.prepare("SELECT m.id,m.email,m.display_name,m.status,m.email_verified,m.privacy_notice_version FROM model_sessions s JOIN model_members m ON m.id=s.model_member_id WHERE s.token_hash=? AND s.expires_at>? AND m.status='active'").bind(await digest(token),nowIso()).first();}
+async function requireModelMember(request,env){const m=await getModelMember(request,env);if(!m)throw Object.assign(new Error("Model Series sign-in required"),{status:401});return m;}
+function modelMemberSafe(m){return{id:m.id,email:m.email,display_name:m.display_name,status:m.status,email_verified:!!m.email_verified,privacy_notice_version:m.privacy_notice_version};}
+function base32Bytes(value){const a="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567",v=String(value||"").toUpperCase().replace(/=+$/,"").replace(/\s/g,"");let bits=0,acc=0,out=[];for(const c of v){const n=a.indexOf(c);if(n<0)throw new Error("ADMIN_TOTP_SECRET must be Base32");acc=(acc<<5)|n;bits+=5;if(bits>=8){bits-=8;out.push((acc>>bits)&255);}}return new Uint8Array(out);}
+async function totpAt(secret,ts){const key=await crypto.subtle.importKey("raw",base32Bytes(secret),{name:"HMAC",hash:"SHA-1"},false,["sign"]),counter=BigInt(Math.floor(ts/30000)),msg=new Uint8Array(8);for(let i=7;i>=0;i--)msg[i]=Number((counter>>BigInt((7-i)*8))&255n);const mac=new Uint8Array(await crypto.subtle.sign("HMAC",key,msg)),o=mac[mac.length-1]&15,n=((mac[o]&127)<<24)|((mac[o+1]&255)<<16)|((mac[o+2]&255)<<8)|(mac[o+3]&255);return String(n%1000000).padStart(6,"0");}
+async function verifyAdminTotp(secret,supplied){if(!/^\d{6}$/.test(String(supplied||"")))return false;for(const d of [-30000,0,30000])if(same(await totpAt(secret,Date.now()+d),supplied))return true;return false;}
+async function requireAdminMfa(request,env){const admin=await requireAdmin(request,env);if(!env.ADMIN_TOTP_SECRET)throw Object.assign(new Error("Admin MFA is not configured; privileged writes are disabled"),{status:503});if(!(await verifyAdminTotp(env.ADMIN_TOTP_SECRET,request.headers.get("X-Admin-TOTP")||"")))throw Object.assign(new Error("Valid administrator TOTP required"),{status:401});return admin;}
+async function issueModelApiKey(env,memberId,licenseId,scopes,expiresAt){const raw="MSM_"+randomToken(32),id=crypto.randomUUID(),now=nowIso();await env.DB.prepare("INSERT INTO model_api_keys (id,model_member_id,model_license_id,key_prefix,key_hash,scopes_json,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?)").bind(id,memberId,licenseId,raw.slice(0,12),await digest(raw),JSON.stringify(scopes),now,expiresAt||null).run();return{id,api_key:raw,key_prefix:raw.slice(0,12),scopes,created_at:now,expires_at:expiresAt||null};}
+async function authenticateModelApiKey(request,env,scope){const m=(request.headers.get("Authorization")||"").match(/^Bearer\s+(MSM_[A-Za-z0-9_-]{40,100})$/);if(!m)throw Object.assign(new Error("Model API key required"),{status:401});const now=nowIso(),row=await env.DB.prepare("SELECT k.id,k.model_member_id,k.model_license_id,k.scopes_json,k.expires_at,k.revoked_at,l.status AS license_status,l.expires_at AS license_expires_at,m.status AS member_status FROM model_api_keys k JOIN model_licenses l ON l.id=k.model_license_id JOIN model_members m ON m.id=k.model_member_id WHERE k.key_hash=?").bind(await digest(m[1])).first();if(!row||row.revoked_at||row.license_status!=="active"||row.member_status!=="active"||(row.expires_at&&row.expires_at<=now)||(row.license_expires_at&&row.license_expires_at<=now))throw Object.assign(new Error("Model API key is invalid or inactive"),{status:401});let scopes=[];try{scopes=JSON.parse(row.scopes_json||"[]");}catch(_){}if(!Array.isArray(scopes)||!scopes.includes(scope))throw Object.assign(new Error("API key scope does not allow this operation"),{status:403});await env.DB.prepare("UPDATE model_api_keys SET last_used_at=? WHERE id=?").bind(now,row.id).run();return row;}
+function secureResponse(response){const h=new Headers(response.headers);h.set("X-Content-Type-Options","nosniff");h.set("X-Frame-Options","DENY");h.set("Referrer-Policy","strict-origin-when-cross-origin");h.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");h.set("Cross-Origin-Resource-Policy","same-origin");h.set("Cross-Origin-Opener-Policy","same-origin");h.set("Strict-Transport-Security","max-age=31536000; includeSubDomains");h.set("Content-Security-Policy","default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
+async function privacySubject(request,env){const m=await getModelMember(request,env);if(m)return{type:"model_member",id:m.id,email:m.email};const u=await getUser(request,env);if(u)return{type:"member",id:u.id,email:u.email};return null;}
+
 async function createUser(env, email, displayName, password, role = "member", verified = 0) {
   const id = crypto.randomUUID(), salt = randomHex(16);
   const pwh = await passwordHash(password, salt);
@@ -135,6 +154,10 @@ async function handle(request, env) {
     const u = await env.DB.prepare("SELECT id,email,display_name,password_salt,password_hash,password_iterations,role,email_verified,status FROM users WHERE email=?").bind(email).first();
     const calculated = u ? await passwordHash(password, u.password_salt, u.password_iterations) : await passwordHash(password, "00000000000000000000000000000000");
     if (!u || !same(calculated, u.password_hash) || u.status !== "active") return fail(401, "電子郵件或密碼不正確 / Incorrect email or password");
+    if (Number(u.password_iterations) < PBKDF2_ITERATIONS) {
+      const salt = randomHex(16), hash = await passwordHash(password,salt,PBKDF2_ITERATIONS);
+      await env.DB.prepare("UPDATE users SET password_salt=?,password_hash=?,password_iterations=? WHERE id=?").bind(salt,hash,PBKDF2_ITERATIONS,u.id).run();
+    }
     await env.DB.prepare("DELETE FROM auth_attempts WHERE email_key=?").bind(emailKey).run();
     const s = await createSession(env, u.id);
     await audit(env, u.id, "member.login", "user", u.id);
@@ -160,45 +183,8 @@ async function handle(request, env) {
     return json({ products });
   }
 
-  if (path === "/api/orders" && method === "POST") {
-    const user = await requireUser(request, env);
-    if (!user.email_verified) return fail(403, "電子郵件尚未核驗；請聯絡管理員完成核驗 / Email verification is pending");
-    const b = await bodyJson(request), productId = String(b.product_id || ""), licenseType = String(b.license_type || "");
-    if (productId !== "morningstar-skill-v3" || !["personal_research", "commercial"].includes(licenseType)) return fail(400, "產品或授權類型無效 / Invalid product or license type");
-    const p = await env.DB.prepare("SELECT id,commercial_enabled FROM products WHERE id=? AND status='available'").bind(productId).first();
-    if (!p) return fail(404, "產品不存在 / Product not found");
-    const terms = await env.DB.prepare("SELECT id FROM legal_documents WHERE id=? AND status='published'").bind(String(b.terms_version || "")).first();
-    if (!terms) return fail(409, "請先接受目前有效的授權條款 / Accept a currently published license notice");
-    if (licenseType === "commercial" && !p.commercial_enabled) return fail(403, "商業授權尚未開放；原始作品權利範圍仍待確認 / Commercial licensing is not enabled");
-    const orderId = crypto.randomUUID();
-    const paymentRef = String(b.payment_reference || "").trim().slice(0, 120) || null;
-    await env.DB.prepare("INSERT INTO orders (id,user_id,product_id,requested_license_type,terms_version,status,payment_reference,currency,created_at,updated_at) VALUES (?,?,?,?,?,'pending_review',?,'TWD',?,?)")
-      .bind(orderId, user.id, productId, licenseType, terms.id, paymentRef, nowIso(), nowIso()).run();
-    await audit(env, user.id, "order.created", "order", orderId, { license_type: licenseType });
-    return json({ order_id: orderId, status: "pending_review", payment_mode: "manual_review" }, 201);
-  }
-
-  if (path.startsWith("/api/download/") && method === "GET") {
-    const user = await requireUser(request, env);
-    if (!user.email_verified) return fail(403, "電子郵件尚未核驗 / Email verification required");
-    const productId = path.slice("/api/download/".length);
-    const license = await env.DB.prepare("SELECT l.id FROM licenses l WHERE l.user_id=? AND l.product_id=? AND l.status='active' AND (l.expires_at IS NULL OR l.expires_at>?) LIMIT 1")
-      .bind(user.id, productId, nowIso()).first();
-    if (!license) return fail(403, "沒有有效授權，請先申請並完成審核 / No active license");
-    const artifact = await env.DB.prepare("SELECT a.content_base64,a.sha256,p.file_name FROM product_artifacts a JOIN products p ON p.id=a.product_id WHERE a.product_id=?").bind(productId).first();
-    if (!artifact) return fail(404, "套件檔案尚未上傳 / Package not uploaded");
-    const binary = Uint8Array.from(atob(artifact.content_base64), c => c.charCodeAt(0));
-    if (binary.byteLength > 1024 * 1024) return fail(413, "檔案超出目前 D1 私有儲存方案容量 / Package exceeds current D1 storage approach");
-    return new Response(binary, { status: 200, headers: {
-      "Content-Type": "application/zip",
-      "Content-Disposition": "attachment; filename=\"" + artifact.file_name.replace(/[^A-Za-z0-9._-]/g, "_") + "\"",
-      "Content-Length": String(binary.byteLength),
-      "Cache-Control": "private, no-store, max-age=0",
-      "Pragma": "no-cache",
-      "X-Content-Type-Options": "nosniff",
-      "X-MorningStar-Artifact-SHA256": artifact.sha256
-    }});
-  }
+  if (path === "/api/orders" && method === "POST") return fail(410,"MorningStar Skill is a public non-commercial release. Commercial licensing belongs to the separate Model Series.");
+  if (path.startsWith("/api/download/") && method === "GET") return fail(410,"Legacy Skill member downloads are retired. Use the public Skill download endpoint or Model Series private downloads.");
 
   if (path === "/api/licenses/validate" && method === "POST") {
     const b = await bodyJson(request), key = String(b.license_key || "").trim();
@@ -235,7 +221,7 @@ async function handle(request, env) {
 
   const verifyMatch = path.match(/^\/api\/admin\/users\/([0-9a-f-]+)\/verify-email$/);
   if (verifyMatch && method === "POST") {
-    const admin = await requireAdmin(request, env), id = verifyMatch[1];
+    const admin = await requireAdminMfa(request, env), id = verifyMatch[1];
     await env.DB.prepare("UPDATE users SET email_verified=1 WHERE id=?").bind(id).run();
     await audit(env, admin.id, "admin.user.verify_email", "user", id);
     return json({ ok: true });
@@ -243,7 +229,7 @@ async function handle(request, env) {
 
   const approveMatch = path.match(/^\/api\/admin\/orders\/([0-9a-f-]+)\/approve$/);
   if (approveMatch && method === "POST") {
-    const admin = await requireAdmin(request, env), id = approveMatch[1];
+    const admin = await requireAdminMfa(request, env), id = approveMatch[1];
     const order = await env.DB.prepare("SELECT o.*,u.email_verified,p.commercial_enabled,p.id AS product_id FROM orders o JOIN users u ON u.id=o.user_id JOIN products p ON p.id=o.product_id WHERE o.id=?").bind(id).first();
     if (!order) return fail(404, "Order not found");
     if (order.status !== "pending_review") return fail(409, "Order is not pending review");
@@ -269,7 +255,7 @@ async function handle(request, env) {
 
   const rejectMatch = path.match(/^\/api\/admin\/orders\/([0-9a-f-]+)\/reject$/);
   if (rejectMatch && method === "POST") {
-    const admin = await requireAdmin(request, env), b = await bodyJson(request), id = rejectMatch[1];
+    const admin = await requireAdminMfa(request, env), b = await bodyJson(request), id = rejectMatch[1];
     await env.DB.prepare("UPDATE orders SET status='rejected',admin_note=?,updated_at=? WHERE id=? AND status='pending_review'")
       .bind(String(b.note || "").slice(0, 500), nowIso(), id).run();
     await audit(env, admin.id, "admin.order.reject", "order", id);
@@ -277,7 +263,7 @@ async function handle(request, env) {
   }
 
   if (path === "/api/admin/artifacts/upload" && method === "POST") {
-    const admin = await requireAdmin(request, env), b = await bodyJson(request, 1500000);
+    const admin = await requireAdminMfa(request, env), b = await bodyJson(request, 1500000);
     const productId = String(b.product_id || ""), fileName = String(b.file_name || "");
     const content = String(b.content_base64 || ""), sha = String(b.sha256 || "").toLowerCase();
     if (productId !== "morningstar-skill-v3" || fileName !== "MorningStar-Skill-v3.0.0-Commercial.zip") return fail(400, "Unexpected product or package file name");
@@ -317,11 +303,11 @@ async function handle(request, env) {
 export default {
   async fetch(request, env) {
     try {
-      return await handle(request, env);
+      return secureResponse(await handle(request, env));
     } catch (error) {
       const status = Number(error && error.status) || 500;
-      if (status >= 500) console.error("MorningStar API error", error && error.message ? error.message : String(error));
-      return json({ error: status >= 500 ? "服務暫時發生錯誤，請稍後再試 / Internal service error" : error.message }, status);
+      if (status >= 500) console.error(JSON.stringify({event:"morningstar_api_error",status,name:error && error.name ? error.name : "Error"}));
+      return secureResponse(json({ error: status >= 500 ? "服務暫時發生錯誤，請稍後再試 / Internal service error" : error.message }, status));
     }
   }
 };
