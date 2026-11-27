@@ -10,6 +10,7 @@
 - The legacy v3.0.0 product row is present with commercial use disabled.
 - New tables such as `schema_migrations`, `skill_releases`, `model_members`, `model_api_quotas` and `release_gate_records` are absent.
 - Production does not currently have `model_legal_documents` or `model_artifacts`, so migrations 0006 and 0007 have no existing target tables to conflict with.
+- The production Worker secret-name list was empty on 2026-11-28. ADMIN_TOTP_SECRET must be configured before deploying the new MFA-protected admin API.
 - The eight migrations were applied to staging only.
 
 ## 1. Make and verify a durable backup
