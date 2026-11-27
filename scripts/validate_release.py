@@ -107,8 +107,8 @@ if "X-Admin-TOTP" not in admin or "/api/admin/overview" not in admin:
     raise SystemExit("FAIL: admin console must use MFA-protected admin endpoints")
 if "ADMIN_TOTP_SECRET" not in admin or "localStorage" in admin:
     raise SystemExit("FAIL: admin console must explain MFA setup and must not persist credentials")
-if "path.startsWith(\"/api/model/\")" not in worker or "is not enabled" not in worker:
-    raise SystemExit("FAIL: Model Series API must fail closed while dependencies are absent")
+if "path.startsWith(\"/api/model/\")" not in worker or 'env.MODEL_SERIES_ENABLED!=="true"' not in worker:
+    raise SystemExit("FAIL: Model Series member routes must remain feature-gated")
 if "skill.release.published" not in worker or "requireAdminMfa" not in worker:
     raise SystemExit("FAIL: release publication must be MFA-gated and audited")
 import subprocess
