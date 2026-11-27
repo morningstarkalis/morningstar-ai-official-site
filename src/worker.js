@@ -259,10 +259,12 @@ async function handleModelApi(request,env,url,path,method){
     }catch(_){return fail(502,"Model inference runtime could not be reached");}
     if(!upstream.ok)return fail(502,"Model inference runtime returned an error");
     let result;try{result=await upstream.json();}catch(_){return fail(502,"Model inference runtime returned invalid JSON");}
-    const inputUnits=Number.isSafeInteger(result.usage?.input_units)&&result.usage.input_units>=0?result.usage.input_units:0;
-    const outputUnits=Number.isSafeInteger(result.usage?.output_units)&&result.usage.output_units>=0?result.usage.output_units:0;
+    const validUsage=Number.isSafeInteger(result.usage?.input_units)&&result.usage.input_units>=0&&Number.isSafeInteger(result.usage?.output_units)&&result.usage.output_units>=0;
+    const inputUnits=validUsage?result.usage.input_units:0;
+    const outputUnits=validUsage?result.usage.output_units:0;
     await env.DB.prepare("INSERT INTO model_api_usage (id,model_api_key_id,model_member_id,model_product_id,request_id,usage_type,input_units,output_units,created_at) VALUES (?,?,?,?,?,'inference',?,?,?)")
       .bind(crypto.randomUUID(),key.id,key.model_member_id,key.model_product_id,requestId,inputUnits,outputUnits,nowIso()).run();
+    if(!validUsage)return fail(502,"Inference runtime did not return valid usage metrics; result withheld and request recorded");
     if(Number(monthly.input_units)+inputUnits>Number(quota.monthly_input_units_limit)||Number(monthly.output_units)+outputUnits>Number(quota.monthly_output_units_limit))return fail(429,"This inference completed but exceeded the remaining monthly unit allowance; usage was recorded and further requests are blocked");
     return json({request_id:requestId,output:result.output??result,usage:{input_units:inputUnits,output_units:outputUnits}});
   }
@@ -381,7 +383,7 @@ async function handleAdminModelApi(request,env,path,method){
     const dailyLimit=Number(b.daily_request_limit??100),inputLimit=Number(b.monthly_input_units_limit??100000),outputLimit=Number(b.monthly_output_units_limit??100000);
     if(!Number.isSafeInteger(dailyLimit)||dailyLimit<1||dailyLimit>100000||!Number.isSafeInteger(inputLimit)||inputLimit<1||inputLimit>100000000||!Number.isSafeInteger(outputLimit)||outputLimit<1||outputLimit>100000000)return fail(400,"API quota limits must be positive integers within the allowed maximum");
     const key="MSML_"+randomToken(24),licenseId=crypto.randomUUID(),now=nowIso(),keyHash=await digest(key);
-    let expiresAt=null;if(b.expires_at){const expiryDate=new Date(b.expires_at);if(!Number.isFinite(expiryDate.getTime()))return fail(400,"Invalid license expiry");expiresAt=expiryDate.toISOString();if(new Date(expiresAt).getTime()<=Date.now())return fail(400,"License expiry must be in the future");}
+    let expiresAt=null;if(b.expires_at){const expiryDate=new Date(b.expires_at);if(!Number.isFinite(expiryDate.getTime()))return fail(400,"Invalid license expiry");expiresAt=expiryDate.toISOString();if(new Date(expiresAt).getTime()<=Date.now()||new Date(expiresAt).getTime()>Date.now()+730*86400000)return fail(400,"License expiry must be in the future and no more than two years away");}
     await env.DB.batch([
       env.DB.prepare("INSERT INTO model_licenses (id,model_member_id,model_order_id,model_product_id,license_type,license_key_hash,license_key_prefix,scopes_json,status,issued_at,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?, 'active',?,?,?)").bind(licenseId,order.model_member_id,order.id,order.model_product_id,order.requested_license_type,keyHash,key.slice(0,12),JSON.stringify(scopes),now,expiresAt,now),
       env.DB.prepare("INSERT INTO model_api_quotas (model_license_id,daily_request_limit,monthly_input_units_limit,monthly_output_units_limit,updated_at) VALUES (?,?,?,?,?)").bind(licenseId,dailyLimit,inputLimit,outputLimit,now),
