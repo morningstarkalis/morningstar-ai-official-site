@@ -109,4 +109,19 @@ if "path.startsWith(\"/api/model/\")" not in worker or "is not enabled" not in w
     raise SystemExit("FAIL: Model Series API must fail closed while dependencies are absent")
 if "skill.release.published" not in worker or "requireAdminMfa" not in worker:
     raise SystemExit("FAIL: release publication must be MFA-gated and audited")
+import subprocess
+import tempfile
+admin_script = re.search(r"<script>([\\s\\S]*?)</script>", admin)
+if not admin_script:
+    raise SystemExit("FAIL: admin console script block not found")
+with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as tmp:
+    tmp.write(admin_script.group(1))
+    temp_script = tmp.name
+try:
+    checked = subprocess.run(["node", "--check", temp_script], capture_output=True, text=True)
+    if checked.returncode:
+        raise SystemExit("FAIL: admin console JavaScript syntax: " + checked.stderr)
+finally:
+    Path(temp_script).unlink(missing_ok=True)
+print("PASS: admin console JavaScript syntax")
 print("PASS: static product separation, release guards, admin MFA and Model Series fail-closed checks")
