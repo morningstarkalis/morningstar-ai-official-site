@@ -164,4 +164,16 @@ if 'k.model_license_id=? AND u.usage_type' not in worker:
     raise SystemExit("FAIL: API quotas must be enforced across all keys for a license")
 if 'X-Admin-TOTP' not in admin or 'model/legal-documents' not in admin or 'model/orders/' not in admin:
     raise SystemExit("FAIL: admin console must expose MFA-protected Model Series governance controls")
+prod_cfg = json.loads((ROOT / "wrangler.jsonc").read_text(encoding="utf-8"))
+stage_cfg = json.loads((ROOT / "wrangler.staging.jsonc").read_text(encoding="utf-8"))
+prod_db = prod_cfg["d1_databases"][0]
+stage_db = stage_cfg["d1_databases"][0]
+if prod_db["database_id"] == stage_db["database_id"] or prod_cfg["name"] == stage_cfg["name"]:
+    raise SystemExit("FAIL: staging Worker must use a different Worker name and D1 database")
+if prod_db.get("migrations_dir") != "./migrations" or stage_db.get("migrations_dir") != "./migrations":
+    raise SystemExit("FAIL: both Wrangler configs must declare the migrations directory")
+for flag in ("MODEL_SERIES_ENABLED", "MODEL_ORDER_REQUESTS_ENABLED", "PROCESSOR_DPA_REVIEWED", "CROSS_BORDER_REVIEWED", "PRIVACY_RETENTION_APPROVED", "CONSUMER_TERMS_REVIEWED"):
+    if stage_cfg.get("vars", {}).get(flag) != "false":
+        raise SystemExit("FAIL: staging must keep Model Series activation flag false: " + flag)
+print("PASS: production/staging Wrangler config isolation")
 print("PASS: static product separation, release guards, admin MFA and Model Series fail-closed checks")
