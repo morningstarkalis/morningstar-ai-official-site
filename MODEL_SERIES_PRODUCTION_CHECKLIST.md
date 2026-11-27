@@ -23,6 +23,10 @@
 | `MODEL_INFERENCE_SECRET` | Authenticate internal Worker-to-Worker inference calls | Required |
 | `MODEL_SERIES_ENABLED` | Allow member registration and sign-in | Keep unset/false until legal and security gates pass |
 | `MODEL_ORDER_REQUESTS_ENABLED` | Allow commercial license requests | Keep unset/false until commercial terms and manual payment/contract process are approved |
+| `PROCESSOR_DPA_REVIEWED` | Processor DPA and subprocessor terms reviewed | Must be true before signup/product activation |
+| `CROSS_BORDER_REVIEWED` | International data transfer / region review completed | Must be true before signup/product activation |
+| `PRIVACY_RETENTION_APPROVED` | Privacy notice, data retention and deletion controls approved | Must be true before signup/product activation |
+| `CONSUMER_TERMS_REVIEWED` | Consumer transaction, cancellation/refund and contract controls reviewed | Must be true before commercial order requests/product activation |
 
 The current repository does not configure these production bindings or secrets. Do not infer they exist because route code references their names.
 
