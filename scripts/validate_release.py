@@ -2,6 +2,7 @@
 """Offline SQLite migration and release-boundary checks; no production credentials required."""
 from pathlib import Path
 import sqlite3
+import json
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
