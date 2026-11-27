@@ -430,6 +430,25 @@ async function handleAdminModelApi(request,env,path,method){
     return json({ok:true,id,status:"available"});
   }
 
+  if(path==="/api/admin/privacy-requests"&&method==="GET"){
+    const admin=await requireAdminMfa(request,env);
+    const requests=rows(await env.DB.prepare("SELECT id,subject_type,subject_id,request_type,details,status,created_at,updated_at FROM privacy_requests WHERE status IN ('pending','in_progress') ORDER BY created_at LIMIT 100").all());
+    return json({administrator:admin.email,requests});
+  }
+
+  const privacyResolve=path.match(/^\/api\/admin\/privacy-requests\/([0-9a-f-]+)\/resolve$/);
+  if(privacyResolve&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=privacyResolve[1],status=String(b.status||""),note=String(b.response_note||"").trim(),evidence=String(b.evidence_reference||"").trim();
+    if(!["in_progress","completed","partially_refused","refused"].includes(status)||note.length<30||evidence.length<8)return fail(400,"A valid status, substantive response note and evidence reference are required");
+    const requestRow=await env.DB.prepare("SELECT request_type FROM privacy_requests WHERE id=?").bind(id).first();
+    if(!requestRow)return fail(404,"Privacy request not found");
+    if(requestRow.request_type==="deletion"&&status==="completed"&&b.deletion_completed!==true)return fail(409,"A deletion request cannot be marked complete without confirming the actual deletion and downstream processor actions");
+    const now=nowIso();
+    await env.DB.prepare("UPDATE privacy_requests SET status=?,response_note=?,updated_at=?,closed_at=? WHERE id=?").bind(status,note+"\nEvidence: "+evidence,now,status==="in_progress"?null:now,id).run();
+    await audit(env,admin.id,"privacy_request.resolved","privacy_request",id,{status,evidence_reference:evidence});
+    return json({ok:true,id,status,notice:"This records case handling only; it does not automatically delete data from external processors or backups."});
+  }
+
   const licenseRevoke=path.match(/^\/api\/admin\/model\/licenses\/([0-9a-f-]+)\/revoke$/);
   if(licenseRevoke&&method==="POST"){
     const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=licenseRevoke[1],note=String(b.reason||"").trim();
