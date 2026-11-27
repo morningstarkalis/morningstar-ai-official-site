@@ -13,6 +13,7 @@ MIGRATIONS = [
     "0005_release_gates_and_retention.sql",
     "0006_model_api_quotas_and_legal_review.sql",
     "0007_model_artifact_review_evidence.sql",
+    "0008_atomic_model_api_quota_counters.sql",
 ]
 
 db = sqlite3.connect(":memory:")
@@ -75,6 +76,10 @@ after = (
 if before != after:
     raise SystemExit(f"FAIL: migrations are not idempotent: before={before}, after={after}")
 print("PASS: idempotent base migrations 0001-0005; additive ALTER TABLE migrations 0006-0007 applied once")
+quota_columns = {row[1] for row in db.execute("PRAGMA table_info(model_api_quotas)")}
+for column in ("daily_window", "daily_requests_used", "monthly_window", "monthly_input_units_used", "monthly_output_units_used"):
+    if column not in quota_columns:
+        raise SystemExit("FAIL: missing atomic quota column: " + column)
 print(f"PASS: required tables ({len(required)})")
 print(f"PASS: RC7 candidate only; {pending[0]} rights assets pending")
 print("PASS: Model Series disabled by default")
