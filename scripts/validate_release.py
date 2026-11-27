@@ -177,4 +177,17 @@ for flag in ("MODEL_SERIES_ENABLED", "MODEL_ORDER_REQUESTS_ENABLED", "PROCESSOR_
     if stage_cfg.get("vars", {}).get(flag) != "false":
         raise SystemExit("FAIL: staging must keep Model Series activation flag false: " + flag)
 print("PASS: production/staging Wrangler config isolation")
+book_page = (ROOT / "public" / "book.html").read_text(encoding="utf-8")
+book_catalog = (ROOT / "BOOK_CATALOG.md").read_text(encoding="utf-8")
+if '<a href="#book"' not in html or '<section id="book">' not in html or 'href="/book.html"' not in html:
+    raise SystemExit("FAIL: homepage must expose a publication section and book details page")
+if "邏輯無間：晨星起源" not in book_page or "Google Play 圖書出版者後台" not in book_page:
+    raise SystemExit("FAIL: book page must contain the sourced title and publisher-console source")
+if "不能證明本書已通過審核" not in book_page or "ISBN" not in book_page or "不列出未經驗證" not in book_page:
+    raise SystemExit("FAIL: book page must disclose review uncertainty and missing metadata")
+if "邏輯無間：晨星起源" not in book_catalog or "public store listing not verified" not in book_catalog:
+    raise SystemExit("FAIL: repository book catalog must preserve evidence scope")
+if "GGKEY:" in book_page or "GGKEY:" in book_catalog or "store/books/details" in book_page:
+    raise SystemExit("FAIL: do not publish internal book IDs or invent a public store URL")
+print("PASS: sourced book page, homepage integration and publication evidence boundaries")
 print("PASS: static product separation, release guards, admin MFA and Model Series fail-closed checks")
