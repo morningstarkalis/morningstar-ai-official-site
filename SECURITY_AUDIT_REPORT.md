@@ -58,6 +58,21 @@
 - Separate creator approval from independent legal/security review references where possible.
 - Use an immutable audit trail for privileged changes and avoid storing secrets or full sensitive content in audit JSON.
 
+## Feature-branch implementation update (2026-11-28)
+
+The draft feature branch now contains:
+- a dedicated Model Series portal and separate member/session handlers;
+- consent receipts, manual member verification, commercial order requests and administrator license issuance/revocation;
+- API key generation with hash-only storage, one-time display, license-bounded scopes, expiry and per-license usage quota checks;
+- a service-binding inference gateway that fails closed when the actual inference service or secret is missing;
+- R2 quarantine/upload/download code with SHA-256 checks and entitlement enforcement, but no R2 bucket is currently enabled;
+- TOTP replay prevention and an administrator console;
+- file-level Skill rights review, exact-package rights review, security/installation gates and checksum-gated publication.
+
+These are source-code observations, not proof that the controls are live. No production deployment, R2 bucket, inference service, member signup, paid order, API key, model artifact or end-to-end Model Series transaction has been verified. The model feature flags and governance flags must remain disabled until the production-equivalent tests and legal prerequisites are closed.
+
+The code currently records external evidence references for legal review, malware scan and rights review. It cannot independently authenticate the truth of a reference string; an actual external report/contract must be inspected and retained. The administrator must not use self-attested text as a substitute for an independent reviewer.
+
 ## Validation still required
 
 - Build and static analysis using the repository's pinned toolchain.
