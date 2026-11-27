@@ -16,6 +16,33 @@
 - [ ] Publish a precise license scope, third-party notices, source references, checksum and release notes.
 - [ ] Static security checks and operational incident contact.
 
+## Engineering implementation in the feature branch (not production acceptance)
+
+The following code paths and interfaces now exist in the draft branch. These are implementation facts only; they are not yet production-tested controls:
+
+- [x] Separate Model Series member/session tables and registration/login/logout endpoints, gated by feature flags and published privacy/terms.
+- [x] Consent receipts for the current privacy notice and terms versions.
+- [x] Manual administrator verification for pending Model Series members.
+- [x] Commercial order requests, exact terms-version binding, and manual order approval requiring settlement and signed-contract references.
+- [x] One-time API key display, hash-only storage, key expiry/revocation, license-bounded scopes and per-license usage quotas.
+- [x] Inference gateway interface using a private Worker Service Binding and internal secret; no model runtime is currently configured.
+- [x] Private R2 artifact upload to quarantine, evidence references, SHA-256 verification, entitlement-checked download and audit records; R2 itself is not enabled.
+- [x] MFA-gated admin console, TOTP time-step replay prevention, rights-review routes and Skill release gates.
+- [x] Model Series portal at /model.html and admin console at /admin.html.
+- [x] Privacy request submission and admin case-record workflow; actual downstream deletion, backup expiry and processor deletion are still manual and not yet evidenced.
+- [x] Seven migration files and CI checks for Worker syntax, admin/member portal scripts, SQLite schema chain and release-boundary assertions.
+
+The following remain blockers despite the branch implementation:
+- [ ] Deploy a separate staging Worker with staging-only bindings and run end-to-end browser/API tests.
+- [ ] Configure and prove admin TOTP secret enrollment and recovery on the actual Cloudflare Worker.
+- [ ] Enable R2, bind a private bucket, and test anonymous access denial.
+- [ ] Build and deploy the real MorningStar inference service and model version; the gateway alone is not an AI model.
+- [ ] Run negative authorization tests for every role, scope, expiry, revocation, quota and wrong-product combination.
+- [ ] Benchmark PBKDF2 at 600,000 iterations on the target Workers plan.
+- [ ] Implement password reset/recovery and a fully evidenced privacy-request/deletion lifecycle.
+- [ ] Complete independent security review, SAST/SCA/DAST, penetration testing and backup restoration.
+- [ ] Obtain qualified legal review and approve actual terms, data map, processor contracts, retention schedule and consumer transaction policy.
+
 ## P0 — Must close before enabling public signup or commercial Model Series
 
 - [ ] Publish Taiwanese PDPA privacy notice with controller identity, purposes, data categories, lawful basis, use area/recipients/method, rights and request channels.
