@@ -20,6 +20,8 @@ if ($UnexpectedChanges.Count -gt 0) {
 
 $ConfigPath = Join-Path $RepoRoot 'wrangler.staging.jsonc'
 $OriginalConfig = [System.IO.File]::ReadAllText($ConfigPath)
+$ConfigBackupPath = Join-Path $env:TEMP ('morningstar-staging-config-' + [guid]::NewGuid().ToString('N') + '.jsonc')
+Copy-Item -LiteralPath $ConfigPath -Destination $ConfigBackupPath -Force
 $ConfigObject = $OriginalConfig | ConvertFrom-Json
 if ($ConfigObject.name -ne 'morningstar-ai-official-site-staging' -or
     $ConfigObject.d1_databases[0].database_id -ne '74cd1491-8d8b-4e56-8ab8-69839ccc60e8' -or
@@ -37,7 +39,8 @@ try {
 }
 finally {
     # Preserve the locally verified invocation_logs=false setting.
-    [System.IO.File]::WriteAllText($ConfigPath, $OriginalConfig, (New-Object System.Text.UTF8Encoding($false)))
+    Copy-Item -LiteralPath $ConfigBackupPath -Destination $ConfigPath -Force
+    Remove-Item -LiteralPath $ConfigBackupPath -Force -ErrorAction SilentlyContinue
 }
 
 $ConfigAfterUpdate = ([System.IO.File]::ReadAllText($ConfigPath) | ConvertFrom-Json)
