@@ -78,6 +78,12 @@ if 'release.status!=="published"' not in worker:
     raise SystemExit("FAIL: public download must reject non-published releases")
 if 'digestBytes(bytes)!==release.sha256' not in worker:
     raise SystemExit("FAIL: public download must verify SHA-256")
-if "Commercial licensing for the legacy Skill product is disabled" not in worker:
-    raise SystemExit("FAIL: legacy Skill commercial endpoint must stay disabled")
+if 'path === "/api/orders" && method === "POST") return fail(410' not in worker:
+    raise SystemExit("FAIL: legacy Skill order creation must be retired")
+if 'path === "/api/auth/register" && method === "POST") return fail(410' not in worker:
+    raise SystemExit("FAIL: public Skill must not require member registration")
+if "/api/admin/commercial/publish" in worker:
+    raise SystemExit("FAIL: legacy Skill commercial publishing endpoint must not exist")
+if '<section id="account">' in html or "ms-auth-form" in html:
+    raise SystemExit("FAIL: legacy Skill member portal must be removed")
 print("PASS: static product separation and public release guard checks")
