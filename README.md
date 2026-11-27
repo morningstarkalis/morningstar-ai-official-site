@@ -63,6 +63,8 @@ Do not commit API keys, bootstrap tokens, private model assets, private datasets
 - [Administrator operations](ADMIN_OPERATIONS.md)
 - [Commercial core boundary](COMMERCIAL_CORE_BOUNDARY.md)
 - [Model Series production activation checklist](MODEL_SERIES_PRODUCTION_CHECKLIST.md)
+- [Staging deployment runbook](STAGING_DEPLOYMENT_RUNBOOK.md)
+- [Production D1 migration runbook](PRODUCTION_MIGRATION_RUNBOOK.md)
 - [Rights and licenses](RIGHTS_AND_LICENSES.md)
 
 ## Repository
