@@ -26,3 +26,6 @@ CREATE TABLE IF NOT EXISTS retention_policy_records (
  created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_retention_policy_status ON retention_policy_records(status,data_category);
+
+INSERT OR IGNORE INTO schema_migrations(version,applied_at)
+VALUES('0005_release_gates_and_retention',CURRENT_TIMESTAMP);
