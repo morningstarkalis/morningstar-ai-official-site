@@ -79,3 +79,6 @@ CREATE INDEX IF NOT EXISTS idx_model_api_usage_member
  ON model_api_usage(model_member_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_model_api_usage_product
  ON model_api_usage(model_product_id, created_at);
+
+INSERT OR IGNORE INTO schema_migrations(version,applied_at)
+VALUES('0003_rights_and_model_controls',CURRENT_TIMESTAMP);
