@@ -35,6 +35,21 @@ npx wrangler d1 migrations list morningstar-membership --remote
 
 Confirm the target database name and ID in `wrangler.jsonc` before any write. Do not use `wrangler.staging.jsonc` for production.
 
+## 2A. Prepare production administrator MFA
+
+Production already has one administrator account, so do not run first-admin bootstrap.
+
+Generate a unique Base32 TOTP secret locally (do not paste it into chat or commit it):
+
+```powershell
+node -e "const b=require('crypto').randomBytes(20),a='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';let bits='';for(const x of b)bits+=x.toString(2).padStart(8,'0');let o='';for(let i=0;i<bits.length;i+=5)o+=a[parseInt(bits.slice(i,i+5).padEnd(5,'0'),2)];console.log(o)"
+```
+
+1. Add the generated value to a trusted authenticator application as a manual TOTP key.
+2. Set the same value as the production Worker Secret `ADMIN_TOTP_SECRET` using Cloudflare Dashboard → Workers & Pages → morningstar-ai-official-site → Settings → Variables and Secrets, or with `npx wrangler secret put ADMIN_TOTP_SECRET --config .\\wrangler.jsonc`.
+3. Do not reuse the staging TOTP secret.
+4. Verify the secret is available before deploying the new Worker. Every privileged operation will require a fresh code, and replayed codes are rejected.
+
 ## 3. Apply the migrations
 
 Only after the backup file exists and its hash is recorded:
