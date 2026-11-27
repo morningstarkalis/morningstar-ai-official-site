@@ -142,7 +142,7 @@ async function handleModelApi(request,env,url,path,method){
   }
 
   if(path==="/api/model/auth/register"&&method==="POST"){
-    if(env.MODEL_SERIES_ENABLED!=="true")return fail(503,"Model Series registration is not enabled");
+    if(env.MODEL_SERIES_ENABLED!=="true"||env.PROCESSOR_DPA_REVIEWED!=="true"||env.CROSS_BORDER_REVIEWED!=="true"||env.PRIVACY_RETENTION_APPROVED!=="true")return fail(503,"Model Series registration is disabled until privacy, processor, cross-border and retention gates are approved");
     const b=await bodyJson(request,12000),email=cleanEmail(b.email),name=String(b.display_name||"").trim(),password=b.password;
     if(!validEmail(email)||!name||name.length>80||!validPassword(password))return fail(400,"Valid email, display name and password (14+ characters) are required");
     const privacy=await env.DB.prepare("SELECT id,version FROM model_legal_documents WHERE scope='privacy_notice' AND status='published' ORDER BY published_at DESC LIMIT 1").first();
@@ -165,7 +165,7 @@ async function handleModelApi(request,env,url,path,method){
   }
 
   if(path==="/api/model/auth/login"&&method==="POST"){
-    if(env.MODEL_SERIES_ENABLED!=="true")return fail(503,"Model Series sign-in is not enabled");
+    if(env.MODEL_SERIES_ENABLED!=="true"||env.PROCESSOR_DPA_REVIEWED!=="true"||env.CROSS_BORDER_REVIEWED!=="true"||env.PRIVACY_RETENTION_APPROVED!=="true")return fail(503,"Model Series sign-in is disabled until privacy, processor, cross-border and retention gates are approved");
     const b=await bodyJson(request),email=cleanEmail(b.email),password=String(b.password||"");
     if(!validEmail(email)||!password)return fail(400,"Invalid email or password");
     const emailKey=await digest(email),since=new Date(Date.now()-15*60*1000).toISOString();
@@ -200,7 +200,7 @@ async function handleModelApi(request,env,url,path,method){
   }
 
   if(path==="/api/model/orders"&&method==="POST"){
-    if(env.MODEL_ORDER_REQUESTS_ENABLED!=="true")return fail(503,"Commercial order requests are not enabled");
+    if(env.MODEL_ORDER_REQUESTS_ENABLED!=="true"||env.CONSUMER_TERMS_REVIEWED!=="true")return fail(503,"Commercial order requests are disabled until consumer terms and transaction controls are approved");
     const member=await requireModelMember(request,env),b=await bodyJson(request,12000);
     const product=await env.DB.prepare("SELECT id,status,commercial_enabled FROM model_products WHERE id=?").bind(String(b.model_product_id||"")).first();
     const terms=await env.DB.prepare("SELECT id,version FROM model_legal_documents WHERE scope='commercial_model_license' AND status='published' AND version=?").bind(String(b.terms_version||"")).first();
@@ -347,6 +347,7 @@ async function handleAdminModelApi(request,env,path,method){
   if(productPublish&&method==="POST"){
     const admin=await requireAdminMfa(request,env),id=productPublish[1];
     if(!env.MODEL_INFERENCE||!env.MODEL_INFERENCE_SECRET||!env.MODEL_ARTIFACTS)return fail(503,"Model inference Service Binding, internal secret and private R2 bucket must all be configured");
+    if(env.PROCESSOR_DPA_REVIEWED!=="true"||env.CROSS_BORDER_REVIEWED!=="true"||env.PRIVACY_RETENTION_APPROVED!=="true"||env.CONSUMER_TERMS_REVIEWED!=="true")return fail(503,"Processor DPA, cross-border transfer, retention and consumer transaction reviews must be approved");
     for(const scope of ["privacy_notice","terms_of_service","commercial_model_license","api_terms"]){
       const doc=await env.DB.prepare("SELECT id FROM model_legal_documents WHERE scope=? AND status='published' ORDER BY published_at DESC LIMIT 1").bind(scope).first();
       if(!doc)return fail(409,"Missing published legal document: "+scope);
