@@ -67,6 +67,7 @@ Do not commit API keys, bootstrap tokens, private model assets, private datasets
 - [Production D1 migration runbook](PRODUCTION_MIGRATION_RUNBOOK.md)
 - [Repository source notice](REPOSITORY_SOURCE_NOTICE.md)
 - [Security policy](SECURITY.md)
+- [GitHub release governance](GITHUB_RELEASE_GOVERNANCE.md)
 - [Rights and licenses](RIGHTS_AND_LICENSES.md)
 
 ## Repository
