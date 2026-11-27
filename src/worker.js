@@ -130,7 +130,7 @@ async function authenticateModelApiKey(request,env,scope){
 
 async function handleModelApi(request,env,url,path,method){
   if(path==="/api/model/legal-documents"&&method==="GET"){
-    const docs=rows(await env.DB.prepare("SELECT id,title,version,scope,body,published_at FROM model_legal_documents WHERE status='published' ORDER BY published_at DESC").all());
+    const docs=rows(await env.DB.prepare("SELECT id,title,version,scope,body,published_at FROM model_legal_documents WHERE status='published' AND scope IN ('privacy_notice','terms_of_service','commercial_model_license','api_terms') ORDER BY published_at DESC").all());
     const latest=[];const seen=new Set();
     for(const doc of docs){if(!seen.has(doc.scope)){latest.push(doc);seen.add(doc.scope);}}
     return json({documents:latest});
