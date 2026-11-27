@@ -111,11 +111,11 @@ if "skill.release.published" not in worker or "requireAdminMfa" not in worker:
     raise SystemExit("FAIL: release publication must be MFA-gated and audited")
 import subprocess
 import tempfile
-admin_script = re.search(r"<script>([\\s\\S]*?)</script>", admin)
-if not admin_script:
+if "<script>" not in admin or "</script>" not in admin:
     raise SystemExit("FAIL: admin console script block not found")
+admin_script = admin.split("<script>", 1)[1].split("</script>", 1)[0]
 with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as tmp:
-    tmp.write(admin_script.group(1))
+    tmp.write(admin_script)
     temp_script = tmp.name
 try:
     checked = subprocess.run(["node", "--check", temp_script], capture_output=True, text=True)
