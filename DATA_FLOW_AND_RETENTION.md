@@ -12,6 +12,20 @@
 - Website HTML currently imports Google Fonts; browser requests can therefore be made to Google Fonts endpoints. The feature branch should remove this import or list it in the third-party processor/recipient disclosure if retained.
 - No verified model inference provider, external analytics provider, payment provider or email processor has been identified in the current repository review. This is not proof that no services are used outside the inspected code.
 
+## 1A. Feature-branch staging migration verification (2026-11-28)
+
+The seven schema migrations were applied to the isolated D1 database `morningstar-membership-staging-v311`. Read-only verification returned:
+- 7 migration records;
+- 1 Skill release row (RC7 candidate);
+- 18 RC7 rights assets, all 18 still pending review;
+- 0 Model Series members, orders, licenses or API quotas;
+- 0 release gates;
+- 0 approved retention policy records.
+
+A read-only check of the production D1 database found none of the new tables `schema_migrations`, `skill_releases`, `model_members`, `model_api_quotas` or `release_gate_records`. Production migrations have not been applied.
+
+The new Model Series routes and portal exist in the feature branch, but no actual member records or customer data were created. Registration and order flags remain off; R2 and inference service bindings are not configured.
+
 ## 2. Data categories and purposes to inventory
 
 | Data category | Product | Purpose to justify | Current status |
