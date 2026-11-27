@@ -10,7 +10,7 @@
 *{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 12% 12%,#19253a 0,transparent 38%),var(--bg);color:var(--text);font:16px/1.8 system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif}a{color:var(--gold)}
 main{max-width:1080px;margin:auto;padding:30px 22px 80px}nav{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:6px 0 20px;margin-bottom:34px}
 .brand{font-size:12px;letter-spacing:2px;color:var(--gold);font-weight:800;text-decoration:none}.crumb{font-size:13px;color:var(--muted);text-decoration:none}
-.hero{padding:30px 0 38px}.eyebrow{font:11px/1.5 ui-monospace,monospace;letter-spacing:2px;color:var(--gold)}
+.hero{padding:30px 0 38px}.cover-thumb{width:64px;height:103px;object-fit:cover;display:block;border:1px solid #d8b66b66;border-radius:3px;box-shadow:0 10px 30px #0009;margin-bottom:18px}.cover-note{font-size:11px;color:var(--muted);margin:-10px 0 16px}.eyebrow{font:11px/1.5 ui-monospace,monospace;letter-spacing:2px;color:var(--gold)}
 h1{font-size:clamp(32px,5vw,54px);line-height:1.2;margin:14px 0}.subtitle{font-size:16px;color:#e0c987;margin:0 0 18px}.lead{color:#c2cad5;max-width:800px}
 .badge{display:inline-block;border:1px solid #9a7f44;border-radius:24px;padding:4px 11px;font-size:12px;color:#e3cb8d;margin:3px 6px 3px 0}
 .notice{border:1px solid #8d6f32;background:#3a2f18aa;padding:16px 18px;border-radius:8px;margin:24px 0;color:#f2dfad}
@@ -23,7 +23,7 @@ dl{display:grid;grid-template-columns:140px 1fr;gap:9px 14px;margin:0}dt{color:v
 </style></head>
 <body><main>
 <nav><a class="brand" href="/">MORNINGSTAR AI</a><a class="crumb" href="/">← 返回官方網站</a></nav>
-<header class="hero"><div class="eyebrow">BOOK / DIGITAL PUBLICATION</div>
+<header class="hero"><img class="cover-thumb" width="64" height="103" src="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCgsODg0PEyAVExISEyccHhcgLikxMC4pLSwzOko+MzZGNywtQFdBRkxOUlNSMj5aYVpQYEpRUk//2wBDAQ4ODhMREyQUFCRLMisyS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0v/wAARCABnAEADASIAAhEBAxEB/8QAGwAAAgIDAQAAAAAAAAAAAAAABAUAAwIGBwH/xAA8EAABAwIDBAUJBQkAAAAAAAABAAIDBBEFEiEGEzFBJlFhdLEUFyIyNmRxk9EHFVSBkSMzU3KCkqHw8f/EABgBAQEBAQEAAAAAAAAAAAAAAAECAwAE/8QAHREBAQEBAQACAwAAAAAAAAAAAAECETEDIRJBUf/aAAwDAQACEQMRAD8A2fEdu8Ew6vmo5n1DpYXZX7uEuAPVdDecfAffPkH6rmm0ntJifbVyeKXtB6ytPwg664PtFwE/jPkH6r3ziYF758g/Vcna0nrVwiNgb/5RZC6l5w8C98+Qfqp5xMC98+QfquXbp3+lYujcBc3sjkc6kftGwEfjPkH6rzzj4B758g/Vcoc09ZVTr9ZVTMHTTaMdI8T70/xQUY9IaA9hR+0Q6RYl3p/ihIgNbjkq/QWxMzI2OlJ0twVVOLkJ5htLJUHLDGHHteG+JWO7xcgB9AWQQy20lz2/pNkJNAW30W+1uBVLcIog1jDJFnLxnA9Y34nRapXRuje5jxlcOIBB8FGdWqsIXx666IV7bI+dupQkg1XoyzphtD7RYl3p/ig2DQahGbQ+0OJd6f4oFhV8+k9HQGxGqbU747agH4hJIni4uiY5iOay1nq5Wz1VZvcIw+JzrhpluD2OFklqXN1y2CHNQ8ta2/otvbsuqJZSeajPx8N0pmNyhZLWtb81fI4cuPNDuW8jO0ftF7RYl3p/il7Sjtoz0ixLvT/FLQ5XPEi4WvleGRtc954NaLkq1sc2lopNeHoHVZ4AYzjVIJnva0yCxZfNm5WI1GvNbxSsa6NrN9myRBvoWLTbnfjwA/6s964qTrRmNlfMII2PMrjlDANSeqy8ENRJbJDK69wMrCb24p1sw8T7STzSuvLnzsubXcX6/HQlO2+jU0RZIS1j6ggcbWjaTr28OxF1y8PGgOcqyV4XA+qCByBN7LEuWyB+0h6RYl3p/ilt0x2lPSPE+9SeKV3UzwjcMdU+XxNohepe7JEeYcdLjtWwffGMx1BpDh1JNKDuy5rHWcR2hwH6JBg0z4cVp3sdlOcC+axsTrYrfPKMPkkIayF+a4As7UuEuUcOd22+PYo3fvwxp+HVFf8AfEldSQMM1OXTyRg5WgDQ8TwF+tH0Ue0lLWwFsbpHFzo4mSSgtDnsvprxsQUPgw3FXjTWCNuShlADCXNGrdBfX9VtMAnbirGvlzNgxKOMDdAZrxEX/RoRrRkc6ke90jjISXknMTqSeawupIf2jv5j4rG61QZbS+0mJ97k8Urume0x6SYn3uTxSsamw4lTPFCKOsqKGff0kropcpbmbxAOhRHluI7iOPfz7osbGwciGuzNA+B1VJw+qaTeMaED1hzV7qXEWtjYWttG8NbYjQ8kW/x0eeU1zqiql3kxmnaRUOy6uB1N/jZYQVlfRSNq4J543uvaS51uLfnorGtxEOkIDbzA5721tp+XNYPhr5KaOJzQYmDM0XCntP0CupdWz0s1O5zZmhpaASLjmqLrToM9pz0lxTvcnild1FFE8LLfSfxH/wByvNSx2rxMXde8PUoolzzykB1xvvjvFBPHzbKdLfvPioouCgvc71nE6W1K8uoouL//2Q==" alt="從 Google Play 圖書出版者後台截圖裁切的封面縮圖"><p class="cover-note">後台截圖縮圖｜非原始高解析封面</p><div class="eyebrow">BOOK / DIGITAL PUBLICATION</div>
 <h1>邏輯無間：晨星起源</h1>
 <p class="subtitle">當你以為自己在自由選擇，其實只是在執行一組無法篡改的出廠參數</p>
 <span class="badge">電子書</span><span class="badge">書籍資訊</span>
@@ -52,7 +52,7 @@ dl{display:grid;grid-template-columns:140px 1fr;gap:9px 14px;margin:0}dt{color:v
 <p>本書的出版資訊不代表讀者因此取得 Skill 特定版本授權、Model Series API 權限、模型權重或商業部署權利；各產品的權利與使用條款仍以其各自公布的文件為準。</p></section>
 
 <section class="source"><h2>資料來源與可驗證範圍</h2>
-<p>本頁依據使用者於 2026-11-28 提供的 Google Play 圖書出版者後台截圖整理。截圖左側可見封面縮圖，但未提供原始高解析封面檔，因此本站暫不將小尺寸截圖放大作為正式封面。</p>
+<p>本頁依據使用者於 2026-11-28 提供的 Google Play 圖書出版者後台截圖整理。本站僅以截圖中可見的 64 × 103 像素封面縮圖原尺寸展示，並標記為後台截圖縮圖；未將它冒充為原始高解析封面。</p>
 <p class="muted">可確認範圍：後台書名欄、電子書標示、部分書籍介紹文字及帳戶初步政策審核通知。不能由此推導正式上架、販售、ISBN、作者欄或個別書籍核准結果。</p></section>
 <footer>© 2026 MorningStar AI · 書籍資訊依出版者後台截圖整理。正式平台狀態以 Google Play 圖書公開商品頁及出版者後台最新記錄為準。</footer>
 </main></body></html>
