@@ -224,8 +224,10 @@ async function handleModelApi(request,env,url,path,method){
     if(!scopes.length||scopes.some(x=>!["inference","usage","download"].includes(x)||!allowed.includes(x)))return fail(403,"Requested API scopes exceed the active license");
     const active=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_api_keys WHERE model_license_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)").bind(licenseId,nowIso()).first();
     if(Number(active.count)>=5)return fail(429,"Maximum active API keys reached for this license");
-    const expiresAt=b.expires_at?new Date(b.expires_at).toISOString():null;
+    let expiresAt=null;
+    if(b.expires_at){const expiryDate=new Date(b.expires_at);if(!Number.isFinite(expiryDate.getTime()))return fail(400,"Invalid API key expiry");expiresAt=expiryDate.toISOString();}
     if(expiresAt&&new Date(expiresAt).getTime()>Date.now()+90*86400000)return fail(400,"API key expiry cannot exceed 90 days");
+    if(expiresAt&&new Date(expiresAt).getTime()<=Date.now())return fail(400,"API key expiry must be in the future");
     const issued=await issueModelApiKey(env,member.id,licenseId,scopes,expiresAt);
     await audit(env,member.id,"model.api_key.issued","model_api_key",issued.id,{scopes,expires_at:expiresAt});
     return json({ok:true,...issued},201);
@@ -257,10 +259,11 @@ async function handleModelApi(request,env,url,path,method){
     }catch(_){return fail(502,"Model inference runtime could not be reached");}
     if(!upstream.ok)return fail(502,"Model inference runtime returned an error");
     let result;try{result=await upstream.json();}catch(_){return fail(502,"Model inference runtime returned invalid JSON");}
-    const inputUnits=Number.isSafeInteger(result.usage?.input_units)?result.usage.input_units:0;
-    const outputUnits=Number.isSafeInteger(result.usage?.output_units)?result.usage.output_units:0;
+    const inputUnits=Number.isSafeInteger(result.usage?.input_units)&&result.usage.input_units>=0?result.usage.input_units:0;
+    const outputUnits=Number.isSafeInteger(result.usage?.output_units)&&result.usage.output_units>=0?result.usage.output_units:0;
     await env.DB.prepare("INSERT INTO model_api_usage (id,model_api_key_id,model_member_id,model_product_id,request_id,usage_type,input_units,output_units,created_at) VALUES (?,?,?,?,?,'inference',?,?,?)")
       .bind(crypto.randomUUID(),key.id,key.model_member_id,key.model_product_id,requestId,inputUnits,outputUnits,nowIso()).run();
+    if(Number(monthly.input_units)+inputUnits>Number(quota.monthly_input_units_limit)||Number(monthly.output_units)+outputUnits>Number(quota.monthly_output_units_limit))return fail(429,"This inference completed but exceeded the remaining monthly unit allowance; usage was recorded and further requests are blocked");
     return json({request_id:requestId,output:result.output??result,usage:{input_units:inputUnits,output_units:outputUnits}});
   }
 
@@ -346,7 +349,7 @@ async function handleAdminModelApi(request,env,path,method){
   const productPublish=path.match(/^\/api\/admin\/model\/products\/([A-Za-z0-9._-]+)\/publish$/);
   if(productPublish&&method==="POST"){
     const admin=await requireAdminMfa(request,env),id=productPublish[1];
-    if(!env.MODEL_INFERENCE||!env.MODEL_INFERENCE_SECRET||!env.MODEL_ARTIFACTS)return fail(503,"Model inference Service Binding, internal secret and private R2 bucket must all be configured");
+    if(env.MODEL_SERIES_ENABLED!=="true"||env.MODEL_ORDER_REQUESTS_ENABLED!=="true"||!env.MODEL_INFERENCE||!env.MODEL_INFERENCE_SECRET||!env.MODEL_ARTIFACTS)return fail(503,"Model Series and order flags, inference Service Binding, internal secret and private R2 bucket must all be configured");
     if(env.PROCESSOR_DPA_REVIEWED!=="true"||env.CROSS_BORDER_REVIEWED!=="true"||env.PRIVACY_RETENTION_APPROVED!=="true"||env.CONSUMER_TERMS_REVIEWED!=="true")return fail(503,"Processor DPA, cross-border transfer, retention and consumer transaction reviews must be approved");
     for(const scope of ["privacy_notice","terms_of_service","commercial_model_license","api_terms"]){
       const doc=await env.DB.prepare("SELECT id FROM model_legal_documents WHERE scope=? AND status='published' ORDER BY published_at DESC LIMIT 1").bind(scope).first();
@@ -375,11 +378,13 @@ async function handleAdminModelApi(request,env,path,method){
     if(payment.length<6||contract.length<6||note.length<20)return fail(400,"Payment/settlement reference, signed contract reference and review note are required");
     const scopes=Array.isArray(b.scopes)?[...new Set(b.scopes.map(String))]:["inference","usage"];
     if(!scopes.length||scopes.some(x=>!["inference","usage","download"].includes(x)))return fail(400,"Invalid license scopes");
+    const dailyLimit=Number(b.daily_request_limit??100),inputLimit=Number(b.monthly_input_units_limit??100000),outputLimit=Number(b.monthly_output_units_limit??100000);
+    if(!Number.isSafeInteger(dailyLimit)||dailyLimit<1||dailyLimit>100000||!Number.isSafeInteger(inputLimit)||inputLimit<1||inputLimit>100000000||!Number.isSafeInteger(outputLimit)||outputLimit<1||outputLimit>100000000)return fail(400,"API quota limits must be positive integers within the allowed maximum");
     const key="MSML_"+randomToken(24),licenseId=crypto.randomUUID(),now=nowIso(),keyHash=await digest(key);
-    const expiresAt=b.expires_at?new Date(b.expires_at).toISOString():null;
+    let expiresAt=null;if(b.expires_at){const expiryDate=new Date(b.expires_at);if(!Number.isFinite(expiryDate.getTime()))return fail(400,"Invalid license expiry");expiresAt=expiryDate.toISOString();if(new Date(expiresAt).getTime()<=Date.now())return fail(400,"License expiry must be in the future");}
     await env.DB.batch([
       env.DB.prepare("INSERT INTO model_licenses (id,model_member_id,model_order_id,model_product_id,license_type,license_key_hash,license_key_prefix,scopes_json,status,issued_at,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?, 'active',?,?,?)").bind(licenseId,order.model_member_id,order.id,order.model_product_id,order.requested_license_type,keyHash,key.slice(0,12),JSON.stringify(scopes),now,expiresAt,now),
-      env.DB.prepare("INSERT INTO model_api_quotas (model_license_id,daily_request_limit,monthly_input_units_limit,monthly_output_units_limit,updated_at) VALUES (?,?,?,?,?)").bind(licenseId,Number(b.daily_request_limit)||100,Number(b.monthly_input_units_limit)||100000,Number(b.monthly_output_units_limit)||100000,now),
+      env.DB.prepare("INSERT INTO model_api_quotas (model_license_id,daily_request_limit,monthly_input_units_limit,monthly_output_units_limit,updated_at) VALUES (?,?,?,?,?)").bind(licenseId,dailyLimit,inputLimit,outputLimit,now),
       env.DB.prepare("UPDATE model_orders SET status='approved',payment_reference=?,admin_note=?,updated_at=? WHERE id=? AND status='pending_review'").bind(payment,"Contract: "+contract+"\n"+note,now,id)
     ]);
     await audit(env,admin.id,"model.order.approved","model_order",id,{license_id:licenseId,scopes,payment_reference:payment,contract_reference:contract});
