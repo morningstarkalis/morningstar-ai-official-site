@@ -197,6 +197,42 @@ async function handle(request, env) {
 
   if (path === "/api/products" && method === "GET") return fail(410,"Use /api/public/skill/releases for public Skill releases.");
 
+
+  // Anonymous public Skill catalog and release download. Only published stable versions can be fetched.
+  if (path === "/api/public/skill/releases" && method === "GET") {
+    const stable = rows(await env.DB.prepare("SELECT version,sha256,license_scope,release_notes,published_at FROM skill_releases WHERE status='published' ORDER BY published_at DESC").all());
+    const candidates = rows(await env.DB.prepare("SELECT version,license_scope,release_notes,created_at FROM skill_releases WHERE status='candidate' ORDER BY created_at DESC").all());
+    return json({
+      product:"MorningStar Skill",
+      access:"public",
+      authentication_required:false,
+      stable_releases:stable.map(x=>({version:x.version,sha256:x.sha256,license_scope:x.license_scope,release_notes:x.release_notes,published_at:x.published_at,download_url:"/api/public/skill/download/"+encodeURIComponent(x.version)})),
+      candidates:candidates.map(x=>({version:x.version,status:"candidate",license_scope:x.license_scope,release_notes:x.release_notes,created_at:x.created_at,downloadable:false}))
+    });
+  }
+  const publicDownloadPrefix="/api/public/skill/download/";
+  if(path.startsWith(publicDownloadPrefix)&&method==="GET"){
+    const version=path.slice(publicDownloadPrefix.length);
+    if(!/^[A-Za-z0-9._-]{1,40}$/.test(version))return fail(400,"Invalid Skill release version");
+    const release=await env.DB.prepare("SELECT version,file_path,sha256,status FROM skill_releases WHERE version=?").bind(version).first();
+    if(!release||release.status!=="published"||!release.file_path)return fail(404,"No published stable Skill release exists for this version");
+    const pieces=release.file_path.split("/");
+    if(pieces.length!==4||pieces[0]!==""||pieces[1]!=="releases"||pieces[2]!=="skill"||!/^[A-Za-z0-9._-]+\.zip$/.test(pieces[3]))return fail(409,"Release path is outside the public Skill asset directory");
+    const asset=await env.ASSETS.fetch(new Request(new URL(release.file_path,url.origin).toString(),{method:"GET"}));
+    if(!asset.ok)return fail(503,"Published Skill archive is not available");
+    const bytes=await asset.arrayBuffer();
+    if(bytes.byteLength>50*1024*1024)return fail(413,"Published Skill archive exceeds the delivery limit");
+    if(await digestBytes(bytes)!==release.sha256)return fail(503,"Published Skill archive SHA-256 mismatch");
+    return new Response(bytes,{status:200,headers:{
+      "Content-Type":"application/zip",
+      "Content-Disposition":"attachment; filename=MorningStar-Skill-"+release.version+".zip",
+      "Content-Length":String(bytes.byteLength),
+      "Cache-Control":"public, max-age=3600",
+      "X-MorningStar-SHA256":release.sha256,
+      "X-Content-Type-Options":"nosniff"
+    }});
+  }
+
   if (path === "/api/orders" && method === "POST") return fail(410,"MorningStar Skill is a public non-commercial release. Commercial licensing belongs to the separate Model Series.");
   if (path.startsWith("/api/download/") && method === "GET") return fail(410,"Legacy Skill member downloads are retired. Use the public Skill download endpoint or Model Series private downloads.");
 
