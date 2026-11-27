@@ -20,14 +20,14 @@ if ($UnexpectedChanges.Count -gt 0) {
 
 $ConfigPath = Join-Path $RepoRoot 'wrangler.staging.jsonc'
 $OriginalConfig = [System.IO.File]::ReadAllText($ConfigPath)
-$ConfigBackupPath = Join-Path $env:TEMP ('morningstar-staging-config-' + [guid]::NewGuid().ToString('N') + '.jsonc')
-Copy-Item -LiteralPath $ConfigPath -Destination $ConfigBackupPath -Force
 $ConfigObject = $OriginalConfig | ConvertFrom-Json
 if ($ConfigObject.name -ne 'morningstar-ai-official-site-staging' -or
     $ConfigObject.d1_databases[0].database_id -ne '74cd1491-8d8b-4e56-8ab8-69839ccc60e8' -or
     $ConfigObject.observability.logs.invocation_logs -ne $false) {
     throw 'Staging config safety check failed. Worker name, D1 ID or invocation_logs setting is not the expected Staging value.'
 }
+$ConfigBackupPath = Join-Path $env:TEMP ('morningstar-staging-config-' + [guid]::NewGuid().ToString('N') + '.jsonc')
+Copy-Item -LiteralPath $ConfigPath -Destination $ConfigBackupPath -Force
 
 try {
     Write-Host 'Fetching the reviewed MorningStar Staging fix...' -ForegroundColor Cyan
