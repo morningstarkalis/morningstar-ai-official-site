@@ -129,6 +129,13 @@ async function authenticateModelApiKey(request,env,scope){
 }
 
 async function handleModelApi(request,env,url,path,method){
+  if(path==="/api/model/legal-documents"&&method==="GET"){
+    const docs=rows(await env.DB.prepare("SELECT id,title,version,scope,body,published_at FROM model_legal_documents WHERE status='published' ORDER BY published_at DESC").all());
+    const latest=[];const seen=new Set();
+    for(const doc of docs){if(!seen.has(doc.scope)){latest.push(doc);seen.add(doc.scope);}}
+    return json({documents:latest});
+  }
+
   if(path==="/api/model/catalog"&&method==="GET"){
     const products=rows(await env.DB.prepare("SELECT id,title,version,description FROM model_products WHERE status='available' AND commercial_enabled=1 ORDER BY created_at DESC").all());
     return json({product_line:"MorningStar AI Model Series",access:"commercial",products});
@@ -279,6 +286,19 @@ async function handleModelApi(request,env,url,path,method){
     const filename=String(artifact.file_name).replace(/[^A-Za-z0-9._-]/g,"_");
     await audit(env,member.id,"model.artifact.downloaded","model_artifact",id,{sha256:artifact.sha256});
     return new Response(bytes,{status:200,headers:{"Content-Type":"application/zip","Content-Disposition":"attachment; filename="+filename,"Content-Length":String(bytes.byteLength),"Cache-Control":"private, no-store","Pragma":"no-cache","X-Content-Type-Options":"nosniff","X-MorningStar-SHA256":artifact.sha256}});
+  }
+
+  if(path==="/api/model/artifacts"&&method==="GET"){
+    const member=await requireModelMember(request,env);
+    const licenses=rows(await env.DB.prepare("SELECT model_product_id,scopes_json FROM model_licenses WHERE model_member_id=? AND status='active' AND (expires_at IS NULL OR expires_at>?)").bind(member.id,nowIso()).all());
+    const products=[...new Set(licenses.filter(l=>{try{return JSON.parse(l.scopes_json||"[]").includes("download");}catch(_){return false;}}).map(l=>l.model_product_id))];
+    if(!products.length)return json({artifacts:[]});
+    const found=[];
+    for(const productId of products){
+      const artifacts=rows(await env.DB.prepare("SELECT id,version,file_name,file_size,sha256,uploaded_at FROM model_artifacts WHERE model_product_id=? AND status='available' ORDER BY uploaded_at DESC").bind(productId).all());
+      for(const item of artifacts)found.push({...item,download_url:"/api/model/artifacts/"+item.id+"/download"});
+    }
+    return json({artifacts:found});
   }
 
   if(path==="/api/model/privacy-requests"&&method==="POST"){
