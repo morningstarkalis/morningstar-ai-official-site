@@ -195,22 +195,12 @@ async function handle(request, env) {
     return json({ user: auditSafeUser(user), licenses, orders, product: p || null });
   }
 
-  if (path === "/api/products" && method === "GET") {
-    const products = rows(await env.DB.prepare("SELECT p.id,p.title,p.version,p.description,p.file_name,p.file_size,p.status,p.commercial_enabled,CASE WHEN a.product_id IS NULL THEN 0 ELSE 1 END AS file_ready FROM products p LEFT JOIN product_artifacts a ON a.product_id=p.id WHERE p.status='available'").all());
-    return json({ products });
-  }
+  if (path === "/api/products" && method === "GET") return fail(410,"Use /api/public/skill/releases for public Skill releases.");
 
   if (path === "/api/orders" && method === "POST") return fail(410,"MorningStar Skill is a public non-commercial release. Commercial licensing belongs to the separate Model Series.");
   if (path.startsWith("/api/download/") && method === "GET") return fail(410,"Legacy Skill member downloads are retired. Use the public Skill download endpoint or Model Series private downloads.");
 
-  if (path === "/api/licenses/validate" && method === "POST") {
-    const b = await bodyJson(request), key = String(b.license_key || "").trim();
-    if (key.length < 20 || key.length > 120) return json({ valid: false });
-    const keyHash = await digest(key);
-    const l = await env.DB.prepare("SELECT l.id,l.status,l.license_type,l.issued_at,l.expires_at,p.id AS product_id,p.version FROM licenses l JOIN products p ON p.id=l.product_id WHERE l.license_key_hash=?").bind(keyHash).first();
-    const valid = !!l && l.status === "active" && (!l.expires_at || l.expires_at > nowIso());
-    return json({ valid, ...(valid ? { license: { id: l.id, type: l.license_type, product_id: l.product_id, version: l.version, issued_at: l.issued_at, expires_at: l.expires_at } } : {}) });
-  }
+  if (path === "/api/licenses/validate" && method === "POST") return fail(410,"Legacy Skill license validation is retired; Model Series uses separate scoped API credentials.");
 
   if (path === "/api/admin/bootstrap" && method === "POST") {
     if (!env.ADMIN_BOOTSTRAP_TOKEN) return fail(503, "請先在 Worker Secrets 設定 ADMIN_BOOTSTRAP_TOKEN / Set the bootstrap secret first");
@@ -229,7 +219,7 @@ async function handle(request, env) {
   }
 
   if (path === "/api/admin/overview" && method === "GET") {
-    const admin = await requireAdmin(request, env);
+    const admin = await requireAdminMfa(request, env);
     const orders = rows(await env.DB.prepare("SELECT o.id,o.requested_license_type,o.status,o.payment_reference,o.created_at,u.email,u.display_name,u.email_verified,p.title,p.version FROM orders o JOIN users u ON u.id=o.user_id JOIN products p ON p.id=o.product_id ORDER BY o.created_at DESC LIMIT 100").all());
     const users = rows(await env.DB.prepare("SELECT id,email,display_name,role,email_verified,status,created_at FROM users ORDER BY created_at DESC LIMIT 100").all());
     const auditRows = rows(await env.DB.prepare("SELECT action,target_type,target_id,created_at FROM audit_log ORDER BY created_at DESC LIMIT 30").all());
@@ -237,7 +227,8 @@ async function handle(request, env) {
   }
 
   const verifyMatch = path.match(/^\/api\/admin\/users\/([0-9a-f-]+)\/verify-email$/);
-  if (verifyMatch && method === "POST") {
+  if (verifyMatch && method === "POST") return fail(410,"Legacy Skill account verification is retired; Model Series identities are separate.");
+  if (verifyMatch && method === "POST" && false) {
     const admin = await requireAdminMfa(request, env), id = verifyMatch[1];
     await env.DB.prepare("UPDATE users SET email_verified=1 WHERE id=?").bind(id).run();
     await audit(env, admin.id, "admin.user.verify_email", "user", id);
@@ -245,7 +236,8 @@ async function handle(request, env) {
   }
 
   const approveMatch = path.match(/^\/api\/admin\/orders\/([0-9a-f-]+)\/approve$/);
-  if (approveMatch && method === "POST") {
+  if (approveMatch && method === "POST") return fail(410,"Legacy Skill member licensing is retired; historical orders are read-only.");
+  if (approveMatch && method === "POST" && false) {
     const admin = await requireAdminMfa(request, env), id = approveMatch[1];
     const order = await env.DB.prepare("SELECT o.*,u.email_verified,p.commercial_enabled,p.id AS product_id FROM orders o JOIN users u ON u.id=o.user_id JOIN products p ON p.id=o.product_id WHERE o.id=?").bind(id).first();
     if (!order) return fail(404, "Order not found");
@@ -271,7 +263,8 @@ async function handle(request, env) {
   }
 
   const rejectMatch = path.match(/^\/api\/admin\/orders\/([0-9a-f-]+)\/reject$/);
-  if (rejectMatch && method === "POST") {
+  if (rejectMatch && method === "POST") return fail(410,"Legacy Skill orders are read-only.");
+  if (rejectMatch && method === "POST" && false) {
     const admin = await requireAdminMfa(request, env), b = await bodyJson(request), id = rejectMatch[1];
     await env.DB.prepare("UPDATE orders SET status='rejected',admin_note=?,updated_at=? WHERE id=? AND status='pending_review'")
       .bind(String(b.note || "").slice(0, 500), nowIso(), id).run();
@@ -279,7 +272,8 @@ async function handle(request, env) {
     return json({ ok: true });
   }
 
-  if (path === "/api/admin/artifacts/upload" && method === "POST") {
+  if (path === "/api/admin/artifacts/upload" && method === "POST") return fail(410,"Legacy Skill package uploads are retired; use the reviewed public release process.");
+  if (path === "/api/admin/artifacts/upload" && method === "POST" && false) {
     const admin = await requireAdminMfa(request, env), b = await bodyJson(request, 1500000);
     const productId = String(b.product_id || ""), fileName = String(b.file_name || "");
     const content = String(b.content_base64 || ""), sha = String(b.sha256 || "").toLowerCase();
@@ -295,7 +289,8 @@ async function handle(request, env) {
     return json({ ok: true, sha256: actual, bytes: bytes.length });
   }
 
-  if (path === "/api/admin/commercial/publish" && method === "POST") {
+  if (path === "/api/admin/commercial/publish" && method === "POST") return fail(410,"Commercial licensing for the legacy Skill product is disabled; use the separate Model Series license workflow.");
+  if (path === "/api/admin/commercial/publish" && method === "POST" && false) {
     const admin = await requireAdmin(request, env), b = await bodyJson(request, 12000);
     const rights = String(b.rights_scope || "").trim(), body = String(b.terms_body || "").trim();
     if (b.confirmation !== true) return fail(400, "Rights confirmation is required");
