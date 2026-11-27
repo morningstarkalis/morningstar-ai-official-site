@@ -62,6 +62,7 @@ Do not commit API keys, bootstrap tokens, private model assets, private datasets
 - [Release blockers and acceptance gates](RELEASE_BLOCKERS.md)
 - [Administrator operations](ADMIN_OPERATIONS.md)
 - [Commercial core boundary](COMMERCIAL_CORE_BOUNDARY.md)
+- [Model Series production activation checklist](MODEL_SERIES_PRODUCTION_CHECKLIST.md)
 - [Rights and licenses](RIGHTS_AND_LICENSES.md)
 
 ## Repository
