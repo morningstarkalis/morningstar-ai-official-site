@@ -76,7 +76,7 @@ after = (
 )
 if before != after:
     raise SystemExit(f"FAIL: migrations are not idempotent: before={before}, after={after}")
-print("PASS: idempotent base migrations 0001-0005; additive ALTER TABLE migrations 0006-0007 applied once")
+print("PASS: idempotent base migrations 0001-0005; additive ALTER TABLE migrations 0006-0008 applied once")
 quota_columns = {row[1] for row in db.execute("PRAGMA table_info(model_api_quotas)")}
 for column in ("daily_window", "daily_requests_used", "monthly_window", "monthly_input_units_used", "monthly_output_units_used"):
     if column not in quota_columns:
@@ -161,8 +161,8 @@ if 'licenseScopes.includes(scope)' not in worker:
     raise SystemExit("FAIL: API key scopes must remain bounded by the commercial license")
 if "daily_requests_used=CASE WHEN daily_window" not in worker or "monthly_input_units_used+?" not in worker:
     raise SystemExit("FAIL: inference quotas must use atomic database counters")
-if 'k.model_license_id=? AND u.usage_type' not in worker:
-    raise SystemExit("FAIL: API quotas must be enforced across all keys for a license")
+if "WHERE model_license_id=? AND (daily_window IS NULL" not in worker:
+    raise SystemExit("FAIL: API quota reservation must be keyed to the license")
 if 'X-Admin-TOTP' not in admin or 'model/legal-documents' not in admin or 'model/orders/' not in admin:
     raise SystemExit("FAIL: admin console must expose MFA-protected Model Series governance controls")
 prod_cfg = json.loads((ROOT / "wrangler.jsonc").read_text(encoding="utf-8"))
