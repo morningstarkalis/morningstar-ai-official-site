@@ -6,17 +6,24 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*"]
+    "run_worker_first": [
+      "/api/*"
+    ]
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "morningstar-membership",
-      "database_id": "028ea21c-486b-47af-8fec-b929d81f7045"
+      "database_id": "028ea21c-486b-47af-8fec-b929d81f7045",
+      "migrations_dir": "./migrations"
     }
   ],
   "observability": {
     "enabled": true,
-    "logs": { "enabled": true, "invocation_logs": true, "persist": true }
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "persist": true
+    }
   }
 }
