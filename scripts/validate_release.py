@@ -148,6 +148,9 @@ if 'path==="/api/model/auth/register"&&method==="POST"' not in worker or 'env.MO
     raise SystemExit("FAIL: Model Series registration must be feature-gated")
 if 'env.MODEL_INFERENCE' not in worker or 'env.MODEL_ARTIFACTS' not in worker:
     raise SystemExit("FAIL: inference and private artifact dependencies must be explicit")
+for gate in ("PROCESSOR_DPA_REVIEWED", "CROSS_BORDER_REVIEWED", "PRIVACY_RETENTION_APPROVED", "CONSUMER_TERMS_REVIEWED"):
+    if gate not in worker:
+        raise SystemExit("FAIL: missing mandatory Model Series governance gate: " + gate)
 if 'licenseScopes.includes(scope)' not in worker:
     raise SystemExit("FAIL: API key scopes must remain bounded by the commercial license")
 if 'k.model_license_id=? AND u.usage_type' not in worker:
