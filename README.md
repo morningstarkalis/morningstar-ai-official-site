@@ -1,64 +1,48 @@
 # MorningStar AI Official Website
 
-Bilingual Traditional Chinese / English website and Cloudflare Workers backend.
+Official bilingual portal for the MorningStar ecosystem. This repository contains the public website and its Cloudflare Workers backend; it is not the private model-development repository.
 
-## Stack
+## Product-line separation
+
+### 1. MorningStar Skill — public distribution
+- Public-facing, free-to-access Skill releases.
+- Non-commercial use only under the exact license and notices shipped with each release.
+- Release archives, checksums, provenance, third-party notices, and historical license records must remain version-specific.
+- Do not silently replace historical licenses or imply that a later release retroactively changes earlier grants.
+- A public release must pass rights review, secret scanning, package integrity checks, and installation testing before being advertised as stable.
+
+### 2. MorningStar AI Model Series — independently managed commercial products
+- A separate commercial product line managed by the rights holder.
+- Model weights, private datasets, training/fine-tuning/distillation pipelines, private orchestration code, production credentials, API infrastructure, customer data, and deployment configuration are excluded from this public repository.
+- Commercial products require their own product documentation, security controls, and separately reviewed license or customer agreements.
+- The public Skill license does not itself grant rights to private model assets or commercial services.
+
+## Rights boundary
+
+The public Skill license applies only to identified material the rights holder owns or is authorized to license. Third-party works, inherited modules, historical releases, trademarks, and AI-assisted contributions must retain their applicable notices and be reviewed individually. A license cannot create exclusivity over abstract ideas, methods, systems, or independently developed implementations.
+
+## Website architecture
+
 - Cloudflare Workers + Static Assets
 - Cloudflare D1 database: `morningstar-membership`
-- GitHub Workers Builds on `main`
-- Private package bytes stored in D1 for the current 38 KB package; migrate to a private R2 bucket when package size or downloads warrant it.
+- Worker API routes: `/api/*`
+- Static assets: `public/`
+- Configuration: `wrangler.jsonc`
 
-## Modules
-- Public theory, research, and bilingual landing page
-- Member registration and sign-in
-- HttpOnly, Secure, SameSite=Lax session cookies; server-side session hashes
-- Manual email verification by administrator (email delivery provider not configured)
-- Personal/research license request, manual order review, license issuance
-- Authenticated package download with SHA-256 verification
-- Admin bootstrap, member verification, order review, package upload, audit log
-- Commercial terms publication is gated and disabled by default pending rights review
+## Deployment
 
-## Deploy
-Cloudflare Workers Builds settings:
+Cloudflare Workers Builds:
 - Git repository: `morningstarkalis/morningstar-ai-official-site`
 - Production branch: `main`
-- Deploy command: `npx wrangler deploy`
+- Build/deploy command: `npx wrangler deploy`
 - Root directory: `/`
-- Config: `wrangler.jsonc`
-- Static assets: `public/`
-- Worker API routes: `/api/*`
-- D1 binding: `DB`
 
-## First administrator setup
-1. In Cloudflare Dashboard, open Worker `morningstar-ai-official-site`.
-2. Settings → Variables and Secrets → Production → Add secret.
-3. Name: `ADMIN_BOOTSTRAP_TOKEN`. Value: generate at least 32 random bytes (64+ hex characters). Never commit it to GitHub.
-4. Deploy the new version.
-5. Open the site, create an account only if desired, then use **First administrator setup**. The bootstrap token can be used exactly once. Bootstrap creates the initial admin account and signs it in.
-6. Delete or rotate the bootstrap secret after successful initialization.
+Changes in feature branches are not live until reviewed, merged, and deployed.
 
-## Customer workflow
-1. Customer registers and signs in.
-2. Administrator verifies the customer email (manual; email sending is not yet configured).
-3. Customer accepts the original-work license notice and submits a personal/research request.
-4. Administrator reviews payment/reference separately and approves/rejects the order.
-5. On approval a license is issued. The license key is displayed once to the administrator; the member account has the entitlement and authenticated download.
-6. Download requests require a valid session, verified email, and active license. Files are not publicly linked.
+## Security and release gate
 
-## Commercial licensing
-Commercial licensing is **disabled by default**. The original work notice is CC BY-NC-ND 4.0 and is not automatically relicensed for commercial use. Before enabling commercial requests, the rights holder must confirm ownership/authorization for commercial additions, exclude non-commercial original content and third-party material, and publish final terms in the administrator console. This workflow is an operational gate, not legal advice. Obtain qualified legal review before taking money.
-
-## Payment and email
-- No payment provider is connected. Orders are manual-review requests only; this site does not collect card data or claim that payment is completed.
-- No transactional email provider is connected. Email verification is currently performed manually by an administrator.
-- Do not enter card numbers, passwords, or secrets into the optional order reference field.
-
-## Security notes / production gate
-- Passwords are PBKDF2-HMAC-SHA256 hashes with unique random salts (31,000 iterations); this is a starter configuration optimized for the Workers Free CPU budget, not a substitute for an independent security audit or a dedicated identity provider.
-- Sessions are random 256-bit opaque tokens; only SHA-256 hashes are stored in D1.
-- Same-origin JSON POST requests, parameterized D1 queries, upload size limits, SHA-256 validation, no-store protected downloads, and admin audit logs are implemented.
-- Add managed email verification, password reset, MFA/passkeys, stronger rate limiting, payment-provider webhooks, privacy policy, terms, and security testing before public commercial launch.
-- D1 Free plan current limits apply; package storage is capped at 1 MiB per upload in this starter implementation. Move artifacts to private R2 for larger files. R2 is not enabled in the current Cloudflare account connection.
+Do not commit API keys, bootstrap tokens, private model assets, private datasets, customer data, or production secrets. The membership backend is an operational mechanism, not proof of legal rights ownership or a substitute for security review. Before public commercial launch, complete independent security testing, privacy and terms review, identity/email hardening, and payment integration review.
 
 ## Repository
+
 https://github.com/morningstarkalis/morningstar-ai-official-site
