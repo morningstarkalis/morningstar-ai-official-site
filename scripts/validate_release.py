@@ -59,6 +59,20 @@ for table in ("users", "model_members", "orders", "model_orders", "licenses", "m
     if count:
         raise SystemExit(f"FAIL: unexpected seed data in {table}: {count}")
 
+# Verify a second application is safe and does not duplicate release or rights records.
+before = (
+    db.execute("SELECT COUNT(*) FROM skill_releases").fetchone()[0],
+    db.execute("SELECT COUNT(*) FROM commercial_rights_assets WHERE product_version='3.1.2-rc.7'").fetchone()[0],
+)
+for name in MIGRATIONS:
+    db.executescript((ROOT / "migrations" / name).read_text(encoding="utf-8"))
+after = (
+    db.execute("SELECT COUNT(*) FROM skill_releases").fetchone()[0],
+    db.execute("SELECT COUNT(*) FROM commercial_rights_assets WHERE product_version='3.1.2-rc.7'").fetchone()[0],
+)
+if before != after:
+    raise SystemExit(f"FAIL: migrations are not idempotent: before={before}, after={after}")
+print("PASS: migration chain is idempotent")
 print(f"PASS: required tables ({len(required)})")
 print(f"PASS: RC7 candidate only; {pending[0]} rights assets pending")
 print("PASS: Model Series disabled by default")
@@ -86,4 +100,13 @@ if "/api/admin/commercial/publish" in worker:
     raise SystemExit("FAIL: legacy Skill commercial publishing endpoint must not exist")
 if '<section id="account">' in html or "ms-auth-form" in html:
     raise SystemExit("FAIL: legacy Skill member portal must be removed")
-print("PASS: static product separation and public release guard checks")
+admin = (ROOT / "public" / "admin.html").read_text(encoding="utf-8")
+if "X-Admin-TOTP" not in admin or "/api/admin/overview" not in admin:
+    raise SystemExit("FAIL: admin console must use MFA-protected admin endpoints")
+if "ADMIN_TOTP_SECRET" not in admin or "localStorage" in admin:
+    raise SystemExit("FAIL: admin console must explain MFA setup and must not persist credentials")
+if "path.startsWith(\"/api/model/\")" not in worker or "is not enabled" not in worker:
+    raise SystemExit("FAIL: Model Series API must fail closed while dependencies are absent")
+if "skill.release.published" not in worker or "requireAdminMfa" not in worker:
+    raise SystemExit("FAIL: release publication must be MFA-gated and audited")
+print("PASS: static product separation, release guards, admin MFA and Model Series fail-closed checks")
