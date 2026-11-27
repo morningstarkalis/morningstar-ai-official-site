@@ -21,11 +21,20 @@ Official bilingual portal for the MorningStar ecosystem. This repository contain
 
 The public Skill license applies only to identified material the rights holder owns or is authorized to license. Third-party works, inherited modules, historical releases, trademarks, and AI-assisted contributions must retain their applicable notices and be reviewed individually. A license cannot create exclusivity over abstract ideas, methods, systems, or independently developed implementations.
 
+## Public publication
+
+- Book record: [邏輯無間：晨星起源](public/book.html)
+- Source/evidence record: [BOOK_CATALOG.md](BOOK_CATALOG.md)
+- The book page reproduces only the visible title, ebook format, synopsis excerpt and account-level review notice from a publisher-console screenshot supplied on 2026-11-28.
+- The screenshot does **not** prove that the book itself passed review or is publicly available in Google Play Books. No public store URL, ISBN, author display record, publication date, pricing or territory setting has been verified.
+- A low-resolution cover thumbnail is visible in the screenshot; the site does not upscale it as a final cover asset. Obtain the original cover file before publishing a high-resolution cover.
+
 ## Website architecture
 
 - Cloudflare Workers + Static Assets
 - Cloudflare D1 database: `morningstar-membership`
 - Worker API routes: `/api/*`
+- Public book information page: `/book.html` (publisher-console facts only; public store availability not yet verified)
 - Public Model Series portal: `/model.html` (separate identity and commercial entitlements)
 - Administrator console: `/admin.html` (MFA required for privileged operations)
 - Static assets: `public/`
