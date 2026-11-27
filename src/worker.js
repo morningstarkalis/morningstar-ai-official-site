@@ -647,7 +647,8 @@ async function handle(request, env) {
     return json({ok:true,version,status:"published",sha256:release.sha256});
   }
 
-  if (path.startsWith("/api/model/")) return fail(503,"MorningStar AI Model Series is not enabled. Its separate identity, reviewed legal documents, private R2 storage, inference runtime and security tests must be completed first.");
+  if (path.startsWith("/api/admin/model/")) return await handleAdminModelApi(request,env,path,method);
+  if (path.startsWith("/api/model/")) return await handleModelApi(request,env,url,path,method);
   return fail(404, "API route not found");
 
 }
