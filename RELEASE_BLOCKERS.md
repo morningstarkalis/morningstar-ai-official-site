@@ -30,7 +30,7 @@ The following code paths and interfaces now exist in the draft branch. These are
 - [x] MFA-gated admin console, TOTP time-step replay prevention, rights-review routes and Skill release gates.
 - [x] Model Series portal at /model.html and admin console at /admin.html.
 - [x] Privacy request submission and admin case-record workflow; actual downstream deletion, backup expiry and processor deletion are still manual and not yet evidenced.
-- [x] Seven migration files and CI checks for Worker syntax, admin/member portal scripts, SQLite schema chain and release-boundary assertions.
+- [x] Eight migration files and CI checks for Worker syntax, admin/member portal scripts, SQLite schema chain and release-boundary assertions.
 
 The following remain blockers despite the branch implementation:
 - [ ] Deploy a separate staging Worker with staging-only bindings and run end-to-end browser/API tests.
