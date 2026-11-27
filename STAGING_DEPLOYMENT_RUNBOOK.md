@@ -53,6 +53,14 @@ npx wrangler secret put ADMIN_TOTP_SECRET --config .\wrangler.staging.jsonc
 
 When prompted, paste the generated values. Add the same TOTP Base32 secret to a trusted authenticator application. Never paste either secret into GitHub, this conversation, or source files.
 
+## Password hashing compatibility (before Bootstrap)
+
+- New credentials use versioned scrypt hashes with the OWASP profile N=2^14, r=8, p=5.
+- The scheme is implemented through `node:crypto`; this Worker uses compatibility date 2026-11-20, which enables Node.js compatibility by default.
+- Existing unprefixed PBKDF2-SHA-256 hashes with a supported iteration count are verified on successful login, then transparently re-hashed with scrypt. No D1 schema change or migration is required.
+- New scrypt rows set the legacy `password_iterations` column to `0`; the algorithm and parameters are carried by the `password_hash` version prefix.
+- Run `node scripts/test_password_kdf.mjs` before deployment. Do not perform Bootstrap until the deployed Staging Worker returns a successful hash/authentication smoke test.
+
 ## 3. Bootstrap staging administrator
 
 1. Open the staging Worker URL followed by `/admin.html`.

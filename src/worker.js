@@ -1,6 +1,7 @@
+import { hashPassword, verifyPassword } from "./password.mjs";
+
 const SESSION_COOKIE = "__Host-ms_session";
 const MODEL_SESSION_COOKIE = "__Host-ms_model_session";
-const PBKDF2_ITERATIONS = 600000;
 const SESSION_DAYS = 1;
 const MODEL_SESSION_HOURS = 12;
 const MAX_MODEL_API_BODY = 65536;
@@ -21,11 +22,6 @@ function randomToken(size = 32) { return randomHex(size); }
 function b64url(bytes) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, ""); }
 async function digest(value) { return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(value)))); }
 async function digestBytes(value) { return hex(new Uint8Array(await crypto.subtle.digest("SHA-256", value))); }
-async function passwordHash(password, salt, iterations = PBKDF2_ITERATIONS) {
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  const bits = await crypto.subtle.deriveBits({ name: "PBKDF2", salt: unhex(salt), iterations, hash: "SHA-256" }, key, 256);
-  return hex(new Uint8Array(bits));
-}
 function same(a, b) {
   if (typeof a !== "string" || typeof b !== "string" || a.length !== b.length) return false;
   let diff = 0; for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
@@ -152,10 +148,10 @@ async function handleModelApi(request,env,url,path,method){
     const attempts=await env.DB.prepare("SELECT COUNT(*) AS count FROM registration_attempts WHERE email_key=? AND attempted_at>?").bind(emailKey,since).first();
     if(Number(attempts.count)>=5)return fail(429,"Too many registration attempts; retry later");
     await env.DB.prepare("INSERT INTO registration_attempts (email_key,attempted_at) VALUES (?,?)").bind(emailKey,nowIso()).run();
-    const salt=randomHex(16),hash=await passwordHash(password,salt),id=crypto.randomUUID(),now=nowIso();
+    const salt=randomHex(16),hash=await hashPassword(password,salt),id=crypto.randomUUID(),now=nowIso();
     try{
       await env.DB.prepare("INSERT INTO model_members (id,email,display_name,password_salt,password_hash,password_iterations,status,email_verified,privacy_notice_version,created_at,updated_at) VALUES (?,?,?,?,?,?,'pending_verification',0,?,?,?)")
-        .bind(id,email,name,salt,hash,PBKDF2_ITERATIONS,privacy.version,now,now).run();
+        .bind(id,email,name,salt,hash,0,privacy.version,now,now).run();
     }catch(e){if(String(e.message).includes("UNIQUE"))return fail(409,"Email is already registered");throw e;}
     await env.DB.batch([
       env.DB.prepare("INSERT INTO consent_receipts (id,subject_type,subject_id,document_id,document_version,purpose,accepted_at) VALUES (?,?,?,?,?,'account_registration',?)").bind(crypto.randomUUID(),"model_member",id,privacy.id,privacy.version,now),
@@ -173,11 +169,13 @@ async function handleModelApi(request,env,url,path,method){
     if(Number(attempts.count)>=8)return fail(429,"Too many login attempts; retry in 15 minutes");
     await env.DB.prepare("INSERT INTO model_auth_attempts (email_key,attempted_at) VALUES (?,?)").bind(emailKey,nowIso()).run();
     const member=await env.DB.prepare("SELECT id,email,display_name,password_salt,password_hash,password_iterations,status,email_verified FROM model_members WHERE email=?").bind(email).first();
-    const calculated=member?await passwordHash(password,member.password_salt,member.password_iterations):await passwordHash(password,"00000000000000000000000000000000");
-    if(!member||!same(calculated,member.password_hash)||member.status!=="active"||!member.email_verified)return fail(401,"Invalid credentials or account not verified");
-    if(Number(member.password_iterations)<PBKDF2_ITERATIONS){
-      const salt=randomHex(16),hash=await passwordHash(password,salt,PBKDF2_ITERATIONS);
-      await env.DB.prepare("UPDATE model_members SET password_salt=?,password_hash=?,password_iterations=?,updated_at=? WHERE id=?").bind(salt,hash,PBKDF2_ITERATIONS,nowIso(),member.id).run();
+    const verification=member
+      ? await verifyPassword(password,member.password_salt,member.password_hash,member.password_iterations)
+      : (await hashPassword(password,"00000000000000000000000000000000"),{valid:false,needsRehash:false});
+    if(!member||!verification.valid||member.status!=="active"||!member.email_verified)return fail(401,"Invalid credentials or account not verified");
+    if(verification.needsRehash){
+      const salt=randomHex(16),hash=await hashPassword(password,salt);
+      await env.DB.prepare("UPDATE model_members SET password_salt=?,password_hash=?,password_iterations=0,updated_at=? WHERE id=? AND password_hash=?").bind(salt,hash,nowIso(),member.id,member.password_hash).run();
     }
     await env.DB.prepare("DELETE FROM model_auth_attempts WHERE email_key=?").bind(emailKey).run();
     const session=await createModelSession(env,member.id);
@@ -478,9 +476,11 @@ async function privacySubject(request,env){const m=await getModelMember(request,
 
 async function createUser(env, email, displayName, password, role = "member", verified = 0) {
   const id = crypto.randomUUID(), salt = randomHex(16);
-  const pwh = await passwordHash(password, salt);
+  const pwh = await hashPassword(password, salt);
+  // password_iterations is retained for the legacy schema; 0 means the versioned scrypt
+  // parameters are embedded in password_hash and no PBKDF2 iteration count applies.
   await env.DB.prepare("INSERT INTO users (id,email,display_name,password_salt,password_hash,password_iterations,role,email_verified,status,created_at) VALUES (?,?,?,?,?,?,?,?,?,?)")
-    .bind(id, email, displayName, salt, pwh, PBKDF2_ITERATIONS, role, verified, "active", nowIso()).run();
+    .bind(id, email, displayName, salt, pwh, 0, role, verified, "active", nowIso()).run();
   return id;
 }
 function auditSafeUser(user) {
@@ -511,12 +511,15 @@ async function handle(request, env) {
     if (Number(attempts.count) >= 8) return fail(429, "登入嘗試過多，請 15 分鐘後再試 / Too many attempts; retry in 15 minutes");
     await env.DB.prepare("INSERT INTO auth_attempts (email_key,attempted_at) VALUES (?,?)").bind(emailKey, nowIso()).run();
     const u = await env.DB.prepare("SELECT id,email,display_name,password_salt,password_hash,password_iterations,role,email_verified,status FROM users WHERE email=?").bind(email).first();
-    const calculated = u ? await passwordHash(password, u.password_salt, u.password_iterations) : await passwordHash(password, "00000000000000000000000000000000");
-    if (!u || !same(calculated, u.password_hash) || u.status !== "active") return fail(401, "電子郵件或密碼不正確 / Incorrect email or password");
+    const verification = u
+      ? await verifyPassword(password, u.password_salt, u.password_hash, u.password_iterations)
+      : (await hashPassword(password, "00000000000000000000000000000000"), { valid: false, needsRehash: false });
+    if (!u || !verification.valid || u.status !== "active") return fail(401, "電子郵件或密碼不正確 / Incorrect email or password");
     if (u.role !== "admin") return fail(403, "This login is reserved for site administrators. Model Series uses a separate account system.");
-    if (Number(u.password_iterations) < PBKDF2_ITERATIONS) {
-      const salt = randomHex(16), hash = await passwordHash(password,salt,PBKDF2_ITERATIONS);
-      await env.DB.prepare("UPDATE users SET password_salt=?,password_hash=?,password_iterations=? WHERE id=?").bind(salt,hash,PBKDF2_ITERATIONS,u.id).run();
+    if (verification.needsRehash) {
+      const salt = randomHex(16), hash = await hashPassword(password, salt);
+      await env.DB.prepare("UPDATE users SET password_salt=?,password_hash=?,password_iterations=0 WHERE id=? AND password_hash=?")
+        .bind(salt, hash, u.id, u.password_hash).run();
     }
     await env.DB.prepare("DELETE FROM auth_attempts WHERE email_key=?").bind(emailKey).run();
     const s = await createSession(env, u.id);

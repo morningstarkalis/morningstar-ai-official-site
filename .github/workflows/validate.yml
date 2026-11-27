@@ -19,5 +19,7 @@ jobs:
           python-version: "3.12"
       - name: Check Worker JavaScript syntax
         run: node --check src/worker.js
+      - name: Test password hashing and legacy upgrade path
+        run: node scripts/test_password_kdf.mjs
       - name: Test migration chain and release guards
         run: python3 scripts/validate_release.py
