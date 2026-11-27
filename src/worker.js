@@ -247,25 +247,25 @@ async function handleModelApi(request,env,url,path,method){
     if(!env.MODEL_INFERENCE||!env.MODEL_INFERENCE_SECRET)return fail(503,"Model inference runtime is not configured");
     const body=await bodyJson(request,MAX_MODEL_API_BODY);
     if(body.input===undefined||body.input===null)return fail(400,"An input field is required");
-    const quota=await env.DB.prepare("SELECT daily_request_limit,monthly_input_units_limit,monthly_output_units_limit FROM model_api_quotas WHERE model_license_id=?").bind(key.model_license_id).first();
-    if(!quota)return fail(503,"No API quota is configured for this license");
-    const daily=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_api_usage u JOIN model_api_keys k ON k.id=u.model_api_key_id WHERE k.model_license_id=? AND u.usage_type='inference' AND u.created_at>=date('now')").bind(key.model_license_id).first();
-    const monthly=await env.DB.prepare("SELECT COALESCE(SUM(u.input_units),0) AS input_units,COALESCE(SUM(u.output_units),0) AS output_units FROM model_api_usage u JOIN model_api_keys k ON k.id=u.model_api_key_id WHERE k.model_license_id=? AND u.usage_type='inference' AND u.created_at>=date('now','start of month')").bind(key.model_license_id).first();
-    if(Number(daily.count)>=Number(quota.daily_request_limit)||Number(monthly.input_units)>=Number(quota.monthly_input_units_limit)||Number(monthly.output_units)>=Number(quota.monthly_output_units_limit))return fail(429,"API quota exceeded");
+    const day=new Date().toISOString().slice(0,10),month=new Date().toISOString().slice(0,7),now=nowIso();
     const requestId=crypto.randomUUID();
+    const reserved=await env.DB.prepare("UPDATE model_api_quotas SET daily_requests_used=CASE WHEN daily_window=? THEN daily_requests_used+1 ELSE 1 END,daily_window=?,updated_at=? WHERE model_license_id=? AND (daily_window IS NULL OR daily_window!=? OR daily_requests_used<daily_request_limit) AND (monthly_window IS NULL OR monthly_window!=? OR (monthly_input_units_used<monthly_input_units_limit AND monthly_output_units_used<monthly_output_units_limit)) RETURNING model_license_id")
+      .bind(day,day,now,key.model_license_id,day,month).first();
+    if(!reserved)return fail(429,"Daily request or monthly usage quota exceeded");
     let upstream;
     try{
-      upstream=await env.MODEL_INFERENCE.fetch(new Request("https://model-inference.internal/v1/infer",{method:"POST",headers:{"Content-Type":"application/json","X-MorningStar-Internal-Secret":env.MODEL_INFERENCE_SECRET,"X-MorningStar-Request-Id":requestId},body:JSON.stringify({model_product_id:key.model_product_id,input:body.input,parameters:body.parameters||{}})}));
-    }catch(_){return fail(502,"Model inference runtime could not be reached");}
+      upstream=await env.MODEL_INFERENCE.fetch(new Request("https://model-inference.internal/v1/infer",{method:"POST",headers:{"Content-Type":"application/json","X-MorningStar-Internal-Secret":env.MODEL_INFERENCE_SECRET,"X-MorningStar-Request-Id":requestId},body:JSON.stringify({model_product_id:key.model_product_id,input:body.input,parameters:body.parameters||{}}),signal:AbortSignal.timeout(60000)}));
+    }catch(_){return fail(502,"Model inference runtime could not be reached or timed out");}
     if(!upstream.ok)return fail(502,"Model inference runtime returned an error");
     let result;try{result=await upstream.json();}catch(_){return fail(502,"Model inference runtime returned invalid JSON");}
     const validUsage=Number.isSafeInteger(result.usage?.input_units)&&result.usage.input_units>=0&&Number.isSafeInteger(result.usage?.output_units)&&result.usage.output_units>=0;
-    const inputUnits=validUsage?result.usage.input_units:0;
-    const outputUnits=validUsage?result.usage.output_units:0;
+    const inputUnits=validUsage?result.usage.input_units:0,outputUnits=validUsage?result.usage.output_units:0;
     await env.DB.prepare("INSERT INTO model_api_usage (id,model_api_key_id,model_member_id,model_product_id,request_id,usage_type,input_units,output_units,created_at) VALUES (?,?,?,?,?,'inference',?,?,?)")
       .bind(crypto.randomUUID(),key.id,key.model_member_id,key.model_product_id,requestId,inputUnits,outputUnits,nowIso()).run();
     if(!validUsage)return fail(502,"Inference runtime did not return valid usage metrics; result withheld and request recorded");
-    if(Number(monthly.input_units)+inputUnits>Number(quota.monthly_input_units_limit)||Number(monthly.output_units)+outputUnits>Number(quota.monthly_output_units_limit))return fail(429,"This inference completed but exceeded the remaining monthly unit allowance; usage was recorded and further requests are blocked");
+    const charged=await env.DB.prepare("UPDATE model_api_quotas SET monthly_input_units_used=CASE WHEN monthly_window=? THEN monthly_input_units_used+? ELSE ? END,monthly_output_units_used=CASE WHEN monthly_window=? THEN monthly_output_units_used+? ELSE ? END,monthly_window=?,updated_at=? WHERE model_license_id=? AND (CASE WHEN monthly_window=? THEN monthly_input_units_used+? ELSE ? END)<=monthly_input_units_limit AND (CASE WHEN monthly_window=? THEN monthly_output_units_used+? ELSE ? END)<=monthly_output_units_limit RETURNING model_license_id")
+      .bind(month,inputUnits,inputUnits,month,outputUnits,outputUnits,month,now,key.model_license_id,month,inputUnits,inputUnits,month,outputUnits,outputUnits).first();
+    if(!charged)return fail(429,"Inference completed but exceeded the monthly unit allowance; usage was recorded and further requests are blocked");
     return json({request_id:requestId,output:result.output??result,usage:{input_units:inputUnits,output_units:outputUnits}});
   }
 
