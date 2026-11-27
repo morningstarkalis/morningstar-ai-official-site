@@ -35,8 +35,8 @@ try {
 
     Write-Host ''
     Write-Host 'PASS: Cloudflare Staging password KDF round-trip completed.' -ForegroundColor Green
-    Write-Host ('Algorithm: ' + $Result.kdf)
-    Write-Host ('Format: ' + $Result.format)
+    Write-Host ('Algorithm: ' + $HashResult.kdf)
+    Write-Host ('Format: ' + $HashResult.format)
     Write-Host ('Hash operation wall time: ' + $HashResult.round_trip_ms + ' ms')
     Write-Host ('Verify operation wall time: ' + $VerifyResult.round_trip_ms + ' ms')
     Write-Host 'D1 writes: none'
