@@ -125,6 +125,24 @@ try:
         raise SystemExit("FAIL: admin console JavaScript syntax: " + checked.stderr)
 finally:
     Path(temp_script).unlink(missing_ok=True)
+model_portal = (ROOT / "public" / "model.html").read_text(encoding="utf-8")
+if 'href="/model.html"' not in html or "MorningStar AI Model Series" not in model_portal:
+    raise SystemExit("FAIL: public site must link to the separate Model Series portal")
+if "/api/model/auth/register" not in model_portal or "/api/model/api-keys" not in model_portal or "/api/model/artifacts" not in model_portal:
+    raise SystemExit("FAIL: Model Series portal is missing member, API-key or private-artifact flows")
+if "<script>" not in model_portal or "</script>" not in model_portal:
+    raise SystemExit("FAIL: Model Series portal script block not found")
+model_script = model_portal.split("<script>", 1)[1].split("</script>", 1)[0]
+with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as tmp:
+    tmp.write(model_script)
+    model_temp_script = tmp.name
+try:
+    checked = subprocess.run(["node", "--check", model_temp_script], capture_output=True, text=True)
+    if checked.returncode:
+        raise SystemExit("FAIL: Model Series portal JavaScript syntax: " + checked.stderr)
+finally:
+    Path(model_temp_script).unlink(missing_ok=True)
+print("PASS: Model Series portal JavaScript syntax")
 print("PASS: admin console JavaScript syntax")
 if 'path==="/api/model/auth/register"&&method==="POST"' not in worker or 'env.MODEL_SERIES_ENABLED!=="true"' not in worker:
     raise SystemExit("FAIL: Model Series registration must be feature-gated")
