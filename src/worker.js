@@ -578,6 +578,33 @@ async function handle(request, env) {
 
   if (path === "/api/licenses/validate" && method === "POST") return fail(410,"Legacy Skill license validation is retired; Model Series uses separate scoped API credentials.");
 
+  if (path === "/api/admin/bootstrap/preflight" && method === "POST") {
+    if (!env.ADMIN_BOOTSTRAP_TOKEN) return fail(503, "Bootstrap preflight is not configured");
+    const supplied = request.headers.get("X-Admin-Bootstrap") || "";
+    if (!same(supplied, env.ADMIN_BOOTSTRAP_TOKEN)) return fail(403, "Bootstrap token invalid");
+    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE role='admin'").first();
+    if (Number(count.count) > 0) return fail(409, "Administrator already initialized");
+    const b = await bodyJson(request, 2000);
+    const password = b.password;
+    if (!validPassword(password)) return fail(400, "Preflight password must be 14 to 160 characters");
+    const salt = randomHex(16);
+    const started = Date.now();
+    const storedHash = await hashPassword(password, salt);
+    const checked = await verifyPassword(password, salt, storedHash, 0);
+    const elapsedMs = Date.now() - started;
+    if (!checked.valid || checked.needsRehash || checked.unsupported) {
+      throw new Error("Password KDF preflight round-trip failed");
+    }
+    return json({
+      ok: true,
+      kdf: "scrypt",
+      format: "scrypt$v1",
+      round_trip_ms: elapsedMs,
+      database_write: false,
+      administrator_created: false
+    });
+  }
+
   if (path === "/api/admin/bootstrap" && method === "POST") {
     if (!env.ADMIN_BOOTSTRAP_TOKEN) return fail(503, "請先在 Worker Secrets 設定 ADMIN_BOOTSTRAP_TOKEN / Set the bootstrap secret first");
     const supplied = request.headers.get("X-Admin-Bootstrap") || "";
