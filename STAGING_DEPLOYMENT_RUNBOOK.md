@@ -7,7 +7,7 @@
 
 ## Important staging migration note
 
-The seven SQL migrations were already applied to this staging D1 through the Cloudflare D1 API and verified. The database has the project-level `schema_migrations` table, but it was not initialized through Wrangler's own `d1_migrations` tracking table.
+The eight SQL migrations were already applied to this staging D1 through the Cloudflare D1 API and verified. The database has the project-level `schema_migrations` table, but it was not initialized through Wrangler's own `d1_migrations` tracking table.
 
 **Do not run `wrangler d1 migrations apply` against this existing staging D1.** Wrangler may consider all files unapplied and re-run non-idempotent ALTER TABLE migrations 0006 and 0007. Use this database only for Worker deployment and API testing. A future fresh staging database should be initialized through Wrangler migrations from the start.
 
