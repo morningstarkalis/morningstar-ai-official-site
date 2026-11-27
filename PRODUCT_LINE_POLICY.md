@@ -49,3 +49,15 @@ A commercial model product is not launch-ready until ownership/authorization, mo
 ## 7. Non-goals and limitations
 
 This policy is an operational boundary, not a legal opinion. It cannot by itself prevent independent development of similar ideas or methods. Trade-secret protection depends on maintaining secrecy and reasonable safeguards. Obtain qualified legal review for final license and commercial terms.
+
+
+## 7. Separate publication record
+
+《邏輯無間：晨星起源》 is presented as a separate publication record at `/book.html`. Its publisher-console metadata and visible synopsis are not the MorningStar Skill software license and do not constitute Model Series commercial entitlements.
+
+Public book status must be stated from evidence:
+- A publisher-console edit screen may establish that a book record exists in the account.
+- An account-level initial policy review notice does not prove that the individual book has passed review.
+- A public Google Play Books listing, purchase availability, author/contributor details, ISBN, price and territories must be verified from the actual public listing or corresponding publisher metadata before being claimed.
+- Do not publish internal publisher-console identifiers or account data.
+- Use the original high-resolution cover only after it is supplied or exported from the platform; do not upscale a low-resolution dashboard thumbnail and represent it as the original.
