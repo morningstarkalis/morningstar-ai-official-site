@@ -158,6 +158,8 @@ for gate in ("PROCESSOR_DPA_REVIEWED", "CROSS_BORDER_REVIEWED", "PRIVACY_RETENTI
         raise SystemExit("FAIL: missing mandatory Model Series governance gate: " + gate)
 if 'licenseScopes.includes(scope)' not in worker:
     raise SystemExit("FAIL: API key scopes must remain bounded by the commercial license")
+if "daily_requests_used=CASE WHEN daily_window" not in worker or "monthly_input_units_used+?" not in worker:
+    raise SystemExit("FAIL: inference quotas must use atomic database counters")
 if 'k.model_license_id=? AND u.usage_type' not in worker:
     raise SystemExit("FAIL: API quotas must be enforced across all keys for a license")
 if 'X-Admin-TOTP' not in admin or 'model/legal-documents' not in admin or 'model/orders/' not in admin:
