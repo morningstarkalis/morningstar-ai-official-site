@@ -62,7 +62,7 @@ When prompted, paste the generated values. Add the same TOTP Base32 secret to a 
 - Run `node scripts/test_password_kdf.mjs` before deployment.
 - After deploying to Staging, run `scripts/test_staging_kdf.ps1` from PowerShell. It calls the secret-protected `/api/admin/bootstrap/preflight` route, which hashes and verifies a throwaway password on the real Worker and explicitly performs no D1 write.
 - The PowerShell preflight must return PASS before any administrator Bootstrap attempt. A failure means stop; do not retry Bootstrap.
-- For a guarded one-command update, local validation, Staging-only deployment and real-runtime preflight, run `powershell -ExecutionPolicy Bypass -File .\\scripts/apply_staging_kdf_fix.ps1` from any directory. It preserves the local Staging config, refuses unrelated working-tree changes, and never sends the actual Bootstrap request.
+- For a guarded one-command update, local validation, Staging-only deployment and real-runtime preflight, run `powershell -ExecutionPolicy Bypass -File scripts/apply_staging_kdf_fix.ps1` from any directory. It preserves the local Staging config, refuses unrelated working-tree changes, and never sends the actual Bootstrap request.
 
 ## 3. Bootstrap staging administrator
 
