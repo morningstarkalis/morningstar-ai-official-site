@@ -126,4 +126,14 @@ try:
 finally:
     Path(temp_script).unlink(missing_ok=True)
 print("PASS: admin console JavaScript syntax")
+if 'path==="/api/model/auth/register"&&method==="POST"' not in worker or 'env.MODEL_SERIES_ENABLED!=="true"' not in worker:
+    raise SystemExit("FAIL: Model Series registration must be feature-gated")
+if 'env.MODEL_INFERENCE' not in worker or 'env.MODEL_ARTIFACTS' not in worker:
+    raise SystemExit("FAIL: inference and private artifact dependencies must be explicit")
+if 'licenseScopes.includes(scope)' not in worker:
+    raise SystemExit("FAIL: API key scopes must remain bounded by the commercial license")
+if 'k.model_license_id=? AND u.usage_type' not in worker:
+    raise SystemExit("FAIL: API quotas must be enforced across all keys for a license")
+if 'X-Admin-TOTP' not in admin or 'model/legal-documents' not in admin or 'model/orders/' not in admin:
+    raise SystemExit("FAIL: admin console must expose MFA-protected Model Series governance controls")
 print("PASS: static product separation, release guards, admin MFA and Model Series fail-closed checks")
