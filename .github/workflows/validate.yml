@@ -1,0 +1,22 @@
+name: MorningStar validation
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check Worker JavaScript syntax
+        run: node --check src/worker.js
+      - name: Test migration chain and release guards
+        run: python3 scripts/validate_release.py
