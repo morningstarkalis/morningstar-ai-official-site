@@ -65,6 +65,8 @@ Do not commit API keys, bootstrap tokens, private model assets, private datasets
 - [Model Series production activation checklist](MODEL_SERIES_PRODUCTION_CHECKLIST.md)
 - [Staging deployment runbook](STAGING_DEPLOYMENT_RUNBOOK.md)
 - [Production D1 migration runbook](PRODUCTION_MIGRATION_RUNBOOK.md)
+- [Repository source notice](REPOSITORY_SOURCE_NOTICE.md)
+- [Security policy](SECURITY.md)
 - [Rights and licenses](RIGHTS_AND_LICENSES.md)
 
 ## Repository
