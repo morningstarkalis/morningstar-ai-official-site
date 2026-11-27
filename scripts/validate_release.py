@@ -12,6 +12,7 @@ MIGRATIONS = [
     "0004_rc7_rights_inventory.sql",
     "0005_release_gates_and_retention.sql",
     "0006_model_api_quotas_and_legal_review.sql",
+    "0007_model_artifact_review_evidence.sql",
 ]
 
 db = sqlite3.connect(":memory:")
