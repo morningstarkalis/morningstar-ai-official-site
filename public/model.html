@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="same-origin">
+<title>MorningStar AI Model Series</title>
+<style>
+:root{color-scheme:dark;--bg:#080b10;--panel:#111923;--line:#2b3746;--text:#edf1f7;--muted:#a4afbd;--gold:#d8b66b;--red:#ff7777;--green:#83d6a3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:30px 20px 80px}header{border-bottom:1px solid var(--line);padding:10px 0 20px;margin-bottom:24px}
+h1{font-size:27px;color:var(--gold);margin:0 0 8px}h2{font-size:19px;margin:0 0 14px}h3{font-size:15px;margin:18px 0 10px}
+p{color:var(--muted);line-height:1.7}.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:flex;flex-direction:column;gap:7px;margin:10px 0}.field label{font-size:12px;color:var(--muted)}
+input,select,textarea{width:100%;background:#090f17;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:11px;font:inherit}textarea{min-height:80px}
+button,.linkbtn{display:inline-block;background:var(--gold);color:#111;border:0;border-radius:6px;padding:10px 14px;font-weight:700;text-decoration:none;cursor:pointer;margin:5px 5px 5px 0}
+button.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}button:disabled{opacity:.4;cursor:not-allowed}
+.status{white-space:pre-wrap;background:#080d13;border:1px solid var(--line);border-radius:6px;padding:12px;color:var(--muted);margin:12px 0}
+.error{color:var(--red)}.ok{color:var(--green)}.hidden{display:none}.small{font-size:12px;color:var(--muted)}
+.card{border:1px solid var(--line);padding:14px;border-radius:7px;margin:8px 0}.tag{font-size:11px;color:var(--gold);border:1px solid var(--gold);border-radius:20px;padding:4px 8px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#080d13;border:1px solid var(--line);padding:12px;border-radius:6px;max-height:360px;overflow:auto}
+a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body><main>
+<header>
+<p><a href="/">← MorningStar 官方網站</a></p>
+<h1>MorningStar AI Model Series</h1>
+<p>獨立商業產品線｜獨立會員、商業授權、API 權限與私有模型檔案。MorningStar Skill 公開版不需要會員登入，也不會因為使用 Skill 而取得 Model Series 權限。</p>
+</header>
+
+<div id="global-status" class="status">正在檢查產品狀態…</div>
+<section class="panel">
+<h2>可用模型產品</h2>
+<div id="catalog">載入中…</div>
+</section>
+
+<section id="access" class="panel">
+<h2>會員存取</h2>
+<div class="grid">
+<form id="register-form">
+<h3>建立 Model Series 帳戶</h3>
+<div class="field"><label>顯示名稱</label><input id="reg-name" maxlength="80" required></div>
+<div class="field"><label>電子郵件</label><input id="reg-email" type="email" required></div>
+<div class="field"><label>密碼（至少 14 字元）</label><input id="reg-password" type="password" minlength="14" required></div>
+<div class="field"><label>隱私告知版本</label><select id="privacy-version" required></select></div>
+<div class="field"><label>服務條款版本</label><select id="terms-version" required></select></div>
+<label class="small"><input id="consent" type="checkbox" required> 我已閱讀並同意上方所列版本的隱私告知及服務條款。</label><br>
+<button id="register-submit" type="submit" disabled>註冊（目前未開放）</button>
+<p class="small">帳戶註冊開放前，必須先發布經審查的隱私告知與服務條款；帳戶目前採管理員人工驗證，尚未提供自動郵件驗證。</p>
+</form>
+<form id="login-form">
+<h3>會員登入</h3>
+<div class="field"><label>電子郵件</label><input id="login-email" type="email" required></div>
+<div class="field"><label>密碼</label><input id="login-password" type="password" required></div>
+<button type="submit">登入</button>
+<p class="small">登入與會員資料只屬於 Model Series。API 金鑰不會以明文保存，簽發時只顯示一次。</p>
+</form>
+</div>
+<div id="auth-status" class="status"></div>
+</section>
+
+<section id="member-dashboard" class="panel hidden">
+<div class="grid"><div><h2>會員控制台</h2><div id="member-profile"></div></div><div><button id="refresh-member" class="secondary">重新載入</button><button id="logout" class="secondary">登出</button></div></div>
+<div id="member-data"></div>
+<h3>申請商業授權</h3>
+<div class="grid">
+<div class="field"><label>產品</label><select id="order-product"></select></div>
+<div class="field"><label>授權類型</label><select id="order-type"><option value="commercial_api">商業 API</option><option value="commercial_deployment">商業部署</option></select></div>
+<div class="field"><label>商業模型授權條款版本</label><select id="order-terms"></select></div>
+</div>
+<button id="request-order">提交授權申請</button>
+<p class="small">此功能建立待審核的商業授權申請，不代表已付款或已取得使用權。管理員須核對付款／結算及簽署合約後才能簽發授權。</p>
+
+<h3>簽發 API 金鑰</h3>
+<div class="grid">
+<div class="field"><label>有效授權</label><select id="key-license"></select></div>
+<div class="field"><label>權限範圍</label><select id="key-scopes" multiple size="3"><option value="inference">推論 inference</option><option value="usage">用量 usage</option><option value="download">私有下載 download</option></select></div>
+<div class="field"><label>到期時間（選填，最多 90 天）</label><input id="key-expiry" type="datetime-local"></div>
+</div>
+<button id="issue-key">建立 API 金鑰</button>
+<div id="issued-key" class="status hidden"></div>
+
+<h3>API 用量查詢</h3>
+<div class="field"><label>API 金鑰（僅在建立時顯示，請自行安全保存）</label><input id="usage-key" type="password" autocomplete="off"></div>
+<button id="load-usage" class="secondary">查詢最近 30 天用量</button>
+<pre id="usage-data"></pre>
+
+<h3>私有模型檔案</h3>
+<button id="load-artifacts" class="secondary">載入已授權檔案</button>
+<div id="artifact-list"></div>
+
+<h3>個資權利請求</h3>
+<div class="grid">
+<div class="field"><label>請求類型</label><select id="privacy-request-type"><option value="access">查詢</option><option value="copy">複製本</option><option value="correction">更正</option><option value="stop_processing">停止處理／利用</option><option value="deletion">刪除</option><option value="restriction">限制處理</option><option value="objection">異議</option><option value="portability">資料可攜</option></select></div>
+<div class="field"><label>補充說明</label><textarea id="privacy-request-details"></textarea></div>
+</div>
+<button id="submit-privacy-request" class="secondary">提交個資權利請求</button>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let catalog=[],documents=[],member=null;
+function showStatus(id,msg,kind){const e=$(id);e.textContent=msg;e.className='status '+(kind||'');}
+async function call(path,body,method,headers={}){
+ const opts={method:method||(body?'POST':'GET'),credentials:'same-origin',headers:{...headers}};
+ if(body!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}
+ const r=await fetch(path,opts);let data={};try{data=await r.json()}catch(_){}
+ if(!r.ok)throw new Error(data.error||('HTTP '+r.status));return data;
+}
+function fillSelect(id,items,value,label){const e=$(id);e.replaceChildren();for(const item of items){const o=document.createElement('option');o.value=item[value];o.textContent=item[label];e.append(o);}}
+async function loadPublic(){
+ try{
+  const [c,d]=await Promise.all([call('/api/model/catalog'),call('/api/model/legal-documents')]);
+  catalog=c.products||[];documents=d.documents||[];
+  $('catalog').replaceChildren();
+  if(!catalog.length){$('catalog').textContent='目前沒有已發布且已啟用的商業模型產品。';}
+  else for(const p of catalog){const card=document.createElement('div');card.className='card';const h=document.createElement('h3');h.textContent=p.title+' · '+p.version;const desc=document.createElement('p');desc.textContent=p.description;card.append(h,desc);$('catalog').append(card);}
+  fillSelect('privacy-version',documents.filter(x=>x.scope==='privacy_notice'), 'version','version');
+  fillSelect('terms-version',documents.filter(x=>x.scope==='terms_of_service'),'version','version');
+  fillSelect('order-terms',documents.filter(x=>x.scope==='commercial_model_license'),'version','version');
+  fillSelect('order-product',catalog,'id','title');
+  $('register-submit').disabled=!(documents.some(x=>x.scope==='privacy_notice')&&documents.some(x=>x.scope==='terms_of_service'));
+  showStatus('global-status',catalog.length?'Model Series 產品目錄已載入。':'Model Series 尚未公開啟用。註冊、商業授權及模型推論功能將維持關閉，直到法律文件與後端依賴完成驗收。',catalog.length?'ok':'');
+ }catch(e){showStatus('global-status','產品目錄載入失敗：'+e.message,'error');}
+}
+async function loadMember(){
+ try{
+  const d=await call('/api/model/me');
+  member=d.user;$('member-dashboard').classList.remove('hidden');$('access').classList.add('hidden');
+  $('member-profile').textContent=member.display_name+' · '+member.email;
+  $('member-data').textContent=JSON.stringify({licenses:d.licenses,api_keys:d.api_keys,orders:d.orders},null,2);
+  const active=(d.licenses||[]).filter(x=>x.status==='active');
+  fillSelect('key-license',active,'id','id');
+ }catch(_){member=null;$('member-dashboard').classList.add('hidden');$('access').classList.remove('hidden');}
+}
+$('register-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ try{
+  const d=await call('/api/model/auth/register',{display_name:$('reg-name').value,email:$('reg-email').value,password:$('reg-password').value,privacy_notice_version:$('privacy-version').value,terms_version:$('terms-version').value,consent:$('consent').checked});
+  showStatus('auth-status','註冊已送出：'+JSON.stringify(d),'ok');
+ }catch(e){showStatus('auth-status',e.message,'error');}
+});
+$('login-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ try{await call('/api/model/auth/login',{email:$('login-email').value,password:$('login-password').value});showStatus('auth-status','登入成功。','ok');await loadMember();}
+ catch(e){showStatus('auth-status',e.message,'error');}
+});
+$('refresh-member').addEventListener('click',loadMember);
+$('logout').addEventListener('click',async()=>{try{await call('/api/model/auth/logout',{});location.reload();}catch(e){showStatus('global-status',e.message,'error');}});
+$('request-order').addEventListener('click',async()=>{
+ try{const d=await call('/api/model/orders',{model_product_id:$('order-product').value,license_type:$('order-type').value,terms_version:$('order-terms').value});showStatus('member-data','授權申請：'+JSON.stringify(d),'ok');await loadMember();}
+ catch(e){showStatus('member-data',e.message,'error');}
+});
+$('issue-key').addEventListener('click',async()=>{
+ try{
+  const scopes=[...$('key-scopes').selectedOptions].map(x=>x.value);let expiry=$('key-expiry').value?new Date($('key-expiry').value).toISOString():null;
+  const d=await call('/api/model/api-keys',{license_id:$('key-license').value,scopes,expires_at:expiry});
+  $('issued-key').classList.remove('hidden');$('issued-key').textContent='請立即安全保存此金鑰；之後不會再次顯示：\n'+d.api_key+'\nScopes: '+d.scopes.join(', ');await loadMember();
+ }catch(e){showStatus('member-data',e.message,'error');}
+});
+$('load-usage').addEventListener('click',async()=>{
+ try{const d=await call('/api/model/v1/usage',undefined,'GET',{Authorization:'Bearer '+$('usage-key').value});$('usage-data').textContent=JSON.stringify(d,null,2);}
+ catch(e){$('usage-data').textContent=e.message;}
+});
+$('load-artifacts').addEventListener('click',async()=>{
+ try{const d=await call('/api/model/artifacts');const root=$('artifact-list');root.replaceChildren();if(!d.artifacts.length){root.textContent='目前沒有可下載的已授權模型檔案。';return;}for(const a of d.artifacts){const p=document.createElement('p');const link=document.createElement('a');link.href=a.download_url;link.textContent=a.file_name+' · '+a.version+' · '+a.file_size+' bytes';p.append(link);root.append(p);}}
+ catch(e){showStatus('artifact-list',e.message,'error');}
+});
+$('submit-privacy-request').addEventListener('click',async()=>{
+ try{const d=await call('/api/model/privacy-requests',{request_type:$('privacy-request-type').value,details:$('privacy-request-details').value});showStatus('member-data','個資權利請求已提交：'+JSON.stringify(d),'ok');}
+ catch(e){showStatus('member-data',e.message,'error');}
+});
+loadPublic().then(loadMember);
+</script>
+</body></html>
