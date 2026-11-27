@@ -153,3 +153,6 @@ VALUES
 -- Intentionally no row is inserted into commercial_rights_reviews.
 -- A review can be recorded only after each file's source, rights basis and applicable
 -- license have been checked and the reviewer has documented evidence and exceptions.
+
+INSERT OR IGNORE INTO schema_migrations(version,applied_at)
+VALUES('0004_rc7_rights_inventory',CURRENT_TIMESTAMP);
