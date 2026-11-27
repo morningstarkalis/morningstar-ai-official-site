@@ -10,7 +10,7 @@
 - The legacy v3.0.0 product row is present with commercial use disabled.
 - New tables such as `schema_migrations`, `skill_releases`, `model_members`, `model_api_quotas` and `release_gate_records` are absent.
 - Production does not currently have `model_legal_documents` or `model_artifacts`, so migrations 0006 and 0007 have no existing target tables to conflict with.
-- The seven migrations were applied to staging only.
+- The eight migrations were applied to staging only.
 
 ## 1. Make and verify a durable backup
 
@@ -43,7 +43,7 @@ Only after the backup file exists and its hash is recorded:
 npx wrangler d1 migrations apply morningstar-membership --remote
 ```
 
-Read every migration name in the confirmation prompt. Abort if the target is not the production database or if the migration list differs from 0001–0007.
+Read every migration name in the confirmation prompt. Abort if the target is not the production database or if the migration list differs from 0001–0008.
 
 Wrangler's D1 migration command records its own migration history and captures a backup after applying migrations. The project also records its version rows in `schema_migrations`.
 
