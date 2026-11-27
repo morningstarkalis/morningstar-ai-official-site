@@ -324,7 +324,10 @@ async function handleAdminModelApi(request,env,path,method){
     const products=rows(await env.DB.prepare("SELECT id,title,version,status,commercial_enabled FROM model_products ORDER BY created_at DESC").all());
     const docs=rows(await env.DB.prepare("SELECT id,title,version,scope,status,review_evidence_reference,published_at FROM model_legal_documents ORDER BY created_at DESC").all());
     const counts=await env.DB.prepare("SELECT (SELECT COUNT(*) FROM model_members) AS members,(SELECT COUNT(*) FROM model_members WHERE status='pending_verification') AS pending_members,(SELECT COUNT(*) FROM model_orders) AS orders,(SELECT COUNT(*) FROM model_orders WHERE status='pending_review') AS pending_orders,(SELECT COUNT(*) FROM model_licenses WHERE status='active') AS active_licenses,(SELECT COUNT(*) FROM model_artifacts) AS artifacts,(SELECT COUNT(*) FROM model_artifacts WHERE status='quarantined') AS quarantined_artifacts").first();
-    return json({administrator:admin.email,products,legal_documents:docs,counts});
+    const pendingMembers=rows(await env.DB.prepare("SELECT id,email,display_name,created_at FROM model_members WHERE status='pending_verification' ORDER BY created_at LIMIT 100").all());
+    const pendingOrders=rows(await env.DB.prepare("SELECT o.id,o.requested_license_type,o.terms_version,o.status,o.created_at,m.id AS member_id,m.email AS member_email,p.title AS product_title,p.version AS product_version FROM model_orders o JOIN model_members m ON m.id=o.model_member_id JOIN model_products p ON p.id=o.model_product_id WHERE o.status='pending_review' ORDER BY o.created_at LIMIT 100").all());
+    const artifacts=rows(await env.DB.prepare("SELECT a.id,a.model_product_id,a.version,a.file_name,a.file_size,a.sha256,a.status,a.uploaded_at,a.security_scan_reference,a.rights_review_reference FROM model_artifacts a ORDER BY a.uploaded_at DESC LIMIT 100").all());
+    return json({administrator:admin.email,products,legal_documents:docs,counts,pending_members:pendingMembers,pending_orders:pendingOrders,artifacts});
   }
 
   if(path==="/api/admin/model/legal-documents"&&method==="POST"){
