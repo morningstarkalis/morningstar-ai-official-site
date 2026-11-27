@@ -123,7 +123,7 @@ async function authenticateModelApiKey(request,env,scope){
   if(!row||row.revoked_at||row.license_status!=="active"||row.member_status!=="active"||!row.email_verified||(row.expires_at&&row.expires_at<=now)||(row.license_expires_at&&row.license_expires_at<=now))throw Object.assign(new Error("Model API key is invalid or inactive"),{status:401});
   if(row.product_status!=="available"||Number(row.commercial_enabled)!==1)throw Object.assign(new Error("Model product is not commercially enabled"),{status:403});
   let scopes=[];try{scopes=JSON.parse(row.scopes_json||"[]");}catch(_){}
-  if(!Array.isArray(scopes)||!scopes.includes(scope))throw Object.assign(new Error("API key scope does not allow this operation"),{status:403});
+  let licenseScopes=[];try{licenseScopes=JSON.parse(row.license_scopes||"[]");}catch(_){}if(!Array.isArray(scopes)||!scopes.includes(scope)||!Array.isArray(licenseScopes)||!licenseScopes.includes(scope))throw Object.assign(new Error("API key or license scope does not allow this operation"),{status:403});
   await env.DB.prepare("UPDATE model_api_keys SET last_used_at=? WHERE id=?").bind(now,row.id).run();
   return row;
 }
@@ -240,8 +240,8 @@ async function handleModelApi(request,env,url,path,method){
     if(body.input===undefined||body.input===null)return fail(400,"An input field is required");
     const quota=await env.DB.prepare("SELECT daily_request_limit,monthly_input_units_limit,monthly_output_units_limit FROM model_api_quotas WHERE model_license_id=?").bind(key.model_license_id).first();
     if(!quota)return fail(503,"No API quota is configured for this license");
-    const daily=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_api_usage WHERE model_api_key_id=? AND usage_type='inference' AND created_at>=date('now')").bind(key.id).first();
-    const monthly=await env.DB.prepare("SELECT COALESCE(SUM(input_units),0) AS input_units,COALESCE(SUM(output_units),0) AS output_units FROM model_api_usage WHERE model_api_key_id=? AND usage_type='inference' AND created_at>=date('now','start of month')").bind(key.id).first();
+    const daily=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_api_usage u JOIN model_api_keys k ON k.id=u.model_api_key_id WHERE k.model_license_id=? AND u.usage_type='inference' AND u.created_at>=date('now')").bind(key.model_license_id).first();
+    const monthly=await env.DB.prepare("SELECT COALESCE(SUM(u.input_units),0) AS input_units,COALESCE(SUM(u.output_units),0) AS output_units FROM model_api_usage u JOIN model_api_keys k ON k.id=u.model_api_key_id WHERE k.model_license_id=? AND u.usage_type='inference' AND u.created_at>=date('now','start of month')").bind(key.model_license_id).first();
     if(Number(daily.count)>=Number(quota.daily_request_limit)||Number(monthly.input_units)>=Number(quota.monthly_input_units_limit)||Number(monthly.output_units)>=Number(quota.monthly_output_units_limit))return fail(429,"API quota exceeded");
     const requestId=crypto.randomUUID();
     let upstream;
@@ -378,7 +378,7 @@ async function handleAdminModelApi(request,env,path,method){
     const form=await request.formData(),productId=String(form.get("model_product_id")||""),version=String(form.get("version")||""),file=form.get("file");
     if(!productId||!version||!file||typeof file.arrayBuffer!=="function")return fail(400,"Product, version and ZIP file are required");
     if(file.size<4||file.size>MAX_MODEL_ARTIFACT_BYTES||!String(file.name||"").toLowerCase().endsWith(".zip"))return fail(413,"ZIP file must be between 4 bytes and 25 MiB");
-    const product=await env.DB.prepare("SELECT id FROM model_products WHERE id=? AND status='draft'").bind(productId).first();
+    const product=await env.DB.prepare("SELECT id FROM model_products WHERE id=? AND status IN ('draft','available')").bind(productId).first();
     if(!product)return fail(404,"Draft Model Series product not found");
     const bytes=await file.arrayBuffer(),magic=new Uint8Array(bytes.slice(0,4));
     if(magic[0]!==0x50||magic[1]!==0x4b)return fail(400,"Uploaded file is not a ZIP archive");
@@ -430,7 +430,8 @@ function auditSafeUser(user) {
 async function handle(request, env) {
   const url = new URL(request.url), path = url.pathname, method = request.method.toUpperCase();
   if (!path.startsWith("/api/")) return env.ASSETS.fetch(request);
-  if (method === "POST" && !originValid(request)) return fail(403, "Origin check failed");
+  const bearerApiRequest = /^Bearer\s+MSM_[A-Za-z0-9_-]{40,100}$/.test(request.headers.get("Authorization") || "");
+  if (method === "POST" && !bearerApiRequest && !originValid(request)) return fail(403, "Origin check failed");
   if (!env.DB) return fail(503, "會員資料庫尚未綁定 / D1 database binding missing");
 
   if (path === "/api/health" && method === "GET") {
