@@ -331,8 +331,11 @@ async function handleAdminModelApi(request,env,path,method){
       const doc=await env.DB.prepare("SELECT id FROM model_legal_documents WHERE scope=? AND status='published' ORDER BY published_at DESC LIMIT 1").bind(scope).first();
       if(!doc)return fail(409,"Missing published legal document: "+scope);
     }
-    const artifact=await env.DB.prepare("SELECT id FROM model_artifacts WHERE model_product_id=? AND status='available' LIMIT 1").bind(id).first();
+    const artifact=await env.DB.prepare("SELECT id,object_key,sha256 FROM model_artifacts WHERE model_product_id=? AND status='available' LIMIT 1").bind(id).first();
     if(!artifact)return fail(409,"At least one reviewed private model artifact must be available");
+    const artifactObject=await env.MODEL_ARTIFACTS.get(artifact.object_key);
+    if(!artifactObject)return fail(409,"Reviewed private model artifact is missing from R2");
+    if(await digestBytes(await artifactObject.arrayBuffer())!==artifact.sha256)return fail(409,"Reviewed private model artifact SHA-256 mismatch");
     const result=await env.DB.prepare("UPDATE model_products SET status='available',commercial_enabled=1,updated_at=? WHERE id=? AND status='draft'").bind(nowIso(),id).run();
     if(!result.meta?.changes)return fail(404,"Draft Model Series product not found");
     await audit(env,admin.id,"model.product.published","model_product",id);
@@ -395,6 +398,12 @@ async function handleAdminModelApi(request,env,path,method){
     const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=artifactApprove[1];
     const scan=String(b.security_scan_reference||"").trim(),rights=String(b.rights_review_reference||"").trim(),note=String(b.review_note||"").trim();
     if(scan.length<8||rights.length<8||note.length<20)return fail(400,"Independent malware scan, rights review evidence and review note are required");
+    if(!env.MODEL_ARTIFACTS)return fail(503,"Private R2 bucket binding is not configured");
+    const artifact=await env.DB.prepare("SELECT object_key,sha256 FROM model_artifacts WHERE id=? AND status='quarantined'").bind(id).first();
+    if(!artifact)return fail(404,"Quarantined artifact not found");
+    const object=await env.MODEL_ARTIFACTS.get(artifact.object_key);
+    if(!object)return fail(404,"Quarantined artifact object is missing from R2");
+    if(await digestBytes(await object.arrayBuffer())!==artifact.sha256)return fail(409,"Quarantined artifact SHA-256 mismatch");
     const result=await env.DB.prepare("UPDATE model_artifacts SET status='available',security_scan_reference=?,rights_review_reference=?,reviewed_by=?,reviewed_at=?,approved_at=? WHERE id=? AND status='quarantined'").bind(scan,rights,admin.id,nowIso(),nowIso(),id).run();
     if(!result.meta?.changes)return fail(404,"Quarantined artifact not found");
     await audit(env,admin.id,"model.artifact.approved","model_artifact",id,{security_scan_reference:scan,rights_review_reference:rights});
