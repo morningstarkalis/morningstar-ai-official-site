@@ -192,3 +192,6 @@ CREATE INDEX IF NOT EXISTS idx_consent_subject ON consent_receipts(subject_type,
 
 -- Explicitly disable all legacy commercial enablement on Skill product records.
 UPDATE products SET commercial_enabled=0 WHERE id='morningstar-skill-v3';
+
+INSERT OR IGNORE INTO schema_migrations(version,applied_at)
+VALUES('0002_two_product_lines',CURRENT_TIMESTAMP);
