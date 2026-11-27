@@ -59,7 +59,9 @@ When prompted, paste the generated values. Add the same TOTP Base32 secret to a 
 - The scheme is implemented through `node:crypto`; this Worker uses compatibility date 2026-11-20, which enables Node.js compatibility by default.
 - Existing unprefixed PBKDF2-SHA-256 hashes with a supported iteration count are verified on successful login, then transparently re-hashed with scrypt. No D1 schema change or migration is required.
 - New scrypt rows set the legacy `password_iterations` column to `0`; the algorithm and parameters are carried by the `password_hash` version prefix.
-- Run `node scripts/test_password_kdf.mjs` before deployment. Do not perform Bootstrap until the deployed Staging Worker returns a successful hash/authentication smoke test.
+- Run `node scripts/test_password_kdf.mjs` before deployment.
+- After deploying to Staging, run `scripts\\test_staging_kdf.ps1` from PowerShell. It calls the secret-protected `/api/admin/bootstrap/preflight` route, which hashes and verifies a throwaway password on the real Worker and explicitly performs no D1 write.
+- The PowerShell preflight must return PASS before any administrator Bootstrap attempt. A failure means stop; do not retry Bootstrap.
 
 ## 3. Bootstrap staging administrator
 
