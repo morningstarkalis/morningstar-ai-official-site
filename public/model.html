@@ -36,6 +36,7 @@ a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 <div id="catalog">載入中…</div>
 </section>
 
+<section class="panel"><h2>法律文件與授權條款</h2><div id="legal-docs">尚無已發布文件。</div></section>
 <section id="access" class="panel">
 <h2>會員存取</h2>
 <div class="grid">
@@ -63,7 +64,7 @@ a{color:var(--gold)}@media(max-width:700px){.grid{grid-template-columns:1fr}}
 
 <section id="member-dashboard" class="panel hidden">
 <div class="grid"><div><h2>會員控制台</h2><div id="member-profile"></div></div><div><button id="refresh-member" class="secondary">重新載入</button><button id="logout" class="secondary">登出</button></div></div>
-<div id="member-data"></div>
+<div id="member-data"></div><h3>已簽發 API 金鑰</h3><div id="key-list"></div>
 <h3>申請商業授權</h3>
 <div class="grid">
 <div class="field"><label>產品</label><select id="order-product"></select></div>
@@ -120,6 +121,9 @@ async function loadPublic(){
   fillSelect('privacy-version',documents.filter(x=>x.scope==='privacy_notice'), 'version','version');
   fillSelect('terms-version',documents.filter(x=>x.scope==='terms_of_service'),'version','version');
   fillSelect('order-terms',documents.filter(x=>x.scope==='commercial_model_license'),'version','version');
+  const legalRoot=$('legal-docs');legalRoot.replaceChildren();
+  if(!documents.length)legalRoot.textContent='目前沒有已發布的法律文件；會員註冊與商業授權因此維持關閉。';
+  for(const doc of documents){const details=document.createElement('details');details.className='card';const summary=document.createElement('summary');summary.textContent=doc.title+' · '+doc.scope+' · v'+doc.version;const pre=document.createElement('pre');pre.textContent=doc.body;details.append(summary,pre);legalRoot.append(details);}
   fillSelect('order-product',catalog,'id','title');
   $('register-submit').disabled=!(documents.some(x=>x.scope==='privacy_notice')&&documents.some(x=>x.scope==='terms_of_service'));
   showStatus('global-status',catalog.length?'Model Series 產品目錄已載入。':'Model Series 尚未公開啟用。註冊、商業授權及模型推論功能將維持關閉，直到法律文件與後端依賴完成驗收。',catalog.length?'ok':'');
@@ -130,7 +134,9 @@ async function loadMember(){
   const d=await call('/api/model/me');
   member=d.user;$('member-dashboard').classList.remove('hidden');$('access').classList.add('hidden');
   $('member-profile').textContent=member.display_name+' · '+member.email;
-  $('member-data').textContent=JSON.stringify({licenses:d.licenses,api_keys:d.api_keys,orders:d.orders},null,2);
+  $('member-data').textContent=JSON.stringify({licenses:d.licenses,orders:d.orders},null,2);
+  const keyRoot=$('key-list');keyRoot.replaceChildren();
+  for(const key of (d.api_keys||[])){const row=document.createElement('div');row.className='card';const info=document.createElement('p');info.textContent=key.key_prefix+' · scopes '+key.scopes_json+' · '+(key.revoked_at?'已撤銷':'有效');row.append(info);if(!key.revoked_at){const btn=document.createElement('button');btn.className='secondary';btn.textContent='撤銷此 API Key';btn.addEventListener('click',async()=>{try{await call('/api/model/api-keys/'+encodeURIComponent(key.id)+'/revoke',{});await loadMember();}catch(e){showStatus('member-data',e.message,'error');}});row.append(btn);}keyRoot.append(row);}
   const active=(d.licenses||[]).filter(x=>x.status==='active');
   fillSelect('key-license',active,'id','id');
  }catch(_){member=null;$('member-dashboard').classList.add('hidden');$('access').classList.remove('hidden');}
