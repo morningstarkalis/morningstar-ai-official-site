@@ -144,22 +144,7 @@ async function handle(request, env) {
     return json({ needs_admin: Number(row.count) === 0, bootstrap_configured: !!env.ADMIN_BOOTSTRAP_TOKEN });
   }
 
-  if (path === "/api/auth/register" && method === "POST") {
-    const b = await bodyJson(request);
-    const email = cleanEmail(b.email), name = String(b.display_name || "").trim(), password = b.password;
-    if (!validEmail(email)) return fail(400, "請輸入有效電子郵件 / Enter a valid email");
-    if (!name || name.length > 80) return fail(400, "顯示名稱需為 1–80 字元 / Display name must be 1–80 characters");
-    if (!validPassword(password)) return fail(400, "密碼至少 14 個字元 / Password must be at least 14 characters");
-    try {
-      const id = await createUser(env, email, name, password);
-      const s = await createSession(env, id);
-      await audit(env, id, "member.register", "user", id);
-      return json({ user: { id, email, display_name: name, role: "member", email_verified: false } }, 201, { "Set-Cookie": sessionCookie(s.token, SESSION_DAYS * 86400) });
-    } catch (e) {
-      if (String(e.message).includes("UNIQUE")) return fail(409, "此電子郵件已註冊 / Email already registered");
-      throw e;
-    }
-  }
+  if (path === "/api/auth/register" && method === "POST") return fail(410,"Public MorningStar Skill does not require an account. Model Series registration uses its separate identity service.");
 
   if (path === "/api/auth/login" && method === "POST") {
     const b = await bodyJson(request), email = cleanEmail(b.email), password = String(b.password || "");
@@ -171,6 +156,7 @@ async function handle(request, env) {
     const u = await env.DB.prepare("SELECT id,email,display_name,password_salt,password_hash,password_iterations,role,email_verified,status FROM users WHERE email=?").bind(email).first();
     const calculated = u ? await passwordHash(password, u.password_salt, u.password_iterations) : await passwordHash(password, "00000000000000000000000000000000");
     if (!u || !same(calculated, u.password_hash) || u.status !== "active") return fail(401, "電子郵件或密碼不正確 / Incorrect email or password");
+    if (u.role !== "admin") return fail(403, "This login is reserved for site administrators. Model Series uses a separate account system.");
     if (Number(u.password_iterations) < PBKDF2_ITERATIONS) {
       const salt = randomHex(16), hash = await passwordHash(password,salt,PBKDF2_ITERATIONS);
       await env.DB.prepare("UPDATE users SET password_salt=?,password_hash=?,password_iterations=? WHERE id=?").bind(salt,hash,PBKDF2_ITERATIONS,u.id).run();
@@ -187,13 +173,7 @@ async function handle(request, env) {
     return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", 0) });
   }
 
-  if (path === "/api/me" && method === "GET") {
-    const user = await requireUser(request, env);
-    const licenses = rows(await env.DB.prepare("SELECT l.id,l.license_type,l.license_key_prefix,l.status,l.issued_at,l.expires_at,p.version AS product_version FROM licenses l JOIN products p ON p.id=l.product_id WHERE l.user_id=? ORDER BY l.issued_at DESC").bind(user.id).all());
-    const orders = rows(await env.DB.prepare("SELECT id,product_id,requested_license_type,status,created_at,updated_at,admin_note FROM orders WHERE user_id=? ORDER BY created_at DESC LIMIT 30").bind(user.id).all());
-    const p = await env.DB.prepare("SELECT p.id,p.title,p.version,p.description,p.file_name,p.file_size,p.status,p.commercial_enabled,CASE WHEN a.product_id IS NULL THEN 0 ELSE 1 END AS file_ready FROM products p LEFT JOIN product_artifacts a ON a.product_id=p.id WHERE p.id='morningstar-skill-v3'").first();
-    return json({ user: auditSafeUser(user), licenses, orders, product: p || null });
-  }
+  if (path === "/api/me" && method === "GET") return fail(410,"Legacy Skill member accounts are retired. Public Skill access requires no login; Model Series uses separate accounts.");
 
   if (path === "/api/products" && method === "GET") return fail(410,"Use /api/public/skill/releases for public Skill releases.");
 
@@ -256,96 +236,74 @@ async function handle(request, env) {
 
   if (path === "/api/admin/overview" && method === "GET") {
     const admin = await requireAdminMfa(request, env);
-    const orders = rows(await env.DB.prepare("SELECT o.id,o.requested_license_type,o.status,o.payment_reference,o.created_at,u.email,u.display_name,u.email_verified,p.title,p.version FROM orders o JOIN users u ON u.id=o.user_id JOIN products p ON p.id=o.product_id ORDER BY o.created_at DESC LIMIT 100").all());
-    const users = rows(await env.DB.prepare("SELECT id,email,display_name,role,email_verified,status,created_at FROM users ORDER BY created_at DESC LIMIT 100").all());
+    const releases = rows(await env.DB.prepare("SELECT version,status,sha256,license_scope,release_notes,created_at,published_at FROM skill_releases ORDER BY created_at DESC").all());
+    const rights = rows(await env.DB.prepare("SELECT product_version,status,included_in_package,COUNT(*) AS count FROM commercial_rights_assets GROUP BY product_version,status,included_in_package ORDER BY product_version,status").all());
+    const modelProducts = rows(await env.DB.prepare("SELECT id,title,version,status,commercial_enabled FROM model_products ORDER BY created_at DESC").all());
+    const modelCounts = await env.DB.prepare("SELECT (SELECT COUNT(*) FROM model_members) AS members,(SELECT COUNT(*) FROM model_orders) AS orders,(SELECT COUNT(*) FROM model_licenses) AS licenses,(SELECT COUNT(*) FROM model_artifacts) AS artifacts").first();
     const auditRows = rows(await env.DB.prepare("SELECT action,target_type,target_id,created_at FROM audit_log ORDER BY created_at DESC LIMIT 30").all());
-    return json({ orders, users, audit: auditRows, administrator: admin.email });
+    return json({ administrator:admin.email, releases, rights, model_products:modelProducts, model_counts:modelCounts, audit:auditRows });
   }
 
-  const verifyMatch = path.match(/^\/api\/admin\/users\/([0-9a-f-]+)\/verify-email$/);
-  if (verifyMatch && method === "POST") return fail(410,"Legacy Skill account verification is retired; Model Series identities are separate.");
-  if (verifyMatch && method === "POST" && false) {
-    const admin = await requireAdminMfa(request, env), id = verifyMatch[1];
-    await env.DB.prepare("UPDATE users SET email_verified=1 WHERE id=?").bind(id).run();
-    await audit(env, admin.id, "admin.user.verify_email", "user", id);
-    return json({ ok: true });
+
+  // Release metadata is public; publishing requires exact-package evidence and MFA.
+  const skillAssetMatch = path.match(/^\\/api\\/admin\\/skill\\/releases\\/([A-Za-z0-9._-]{1,40})\\/asset$/);
+  if (skillAssetMatch && method === "POST") {
+    const admin = await requireAdminMfa(request,env), b = await bodyJson(request,12000);
+    const version = skillAssetMatch[1], filePath = String(b.file_path || "");
+    if (!/^\\/releases\\/skill\\/[A-Za-z0-9._-]+\\.zip$/.test(filePath)) return fail(400,"Asset path must be under /releases/skill/ and end in .zip");
+    const release = await env.DB.prepare("SELECT version,sha256,status FROM skill_releases WHERE version=?").bind(version).first();
+    if (!release || release.status !== "candidate") return fail(404,"Candidate Skill release not found");
+    const asset = await env.ASSETS.fetch(new Request(new URL(filePath,url.origin).toString()));
+    if (!asset.ok) return fail(404,"Release asset is not present in the deployed static assets");
+    const bytes = await asset.arrayBuffer();
+    if (await digestBytes(bytes) !== release.sha256) return fail(409,"Release asset SHA-256 does not match the candidate manifest");
+    await env.DB.prepare("UPDATE skill_releases SET file_path=? WHERE version=? AND status='candidate'").bind(filePath,version).run();
+    await audit(env,admin.id,"skill.release.asset_attached","skill_release",version,{file_path:filePath,sha256:release.sha256});
+    return json({ok:true,version,file_path:filePath,sha256:release.sha256});
   }
 
-  const approveMatch = path.match(/^\/api\/admin\/orders\/([0-9a-f-]+)\/approve$/);
-  if (approveMatch && method === "POST") return fail(410,"Legacy Skill member licensing is retired; historical orders are read-only.");
-  if (approveMatch && method === "POST" && false) {
-    const admin = await requireAdminMfa(request, env), id = approveMatch[1];
-    const order = await env.DB.prepare("SELECT o.*,u.email_verified,p.commercial_enabled,p.id AS product_id FROM orders o JOIN users u ON u.id=o.user_id JOIN products p ON p.id=o.product_id WHERE o.id=?").bind(id).first();
-    if (!order) return fail(404, "Order not found");
-    if (order.status !== "pending_review") return fail(409, "Order is not pending review");
-    if (!order.email_verified) return fail(409, "會員電子郵件尚未核驗 / Member email not verified");
-    if (order.requested_license_type === "commercial") {
-      if (!order.commercial_enabled) return fail(403, "Commercial licensing is disabled");
-      const doc = await env.DB.prepare("SELECT id FROM legal_documents WHERE id=? AND status='published'").bind(order.terms_version).first();
-      if (!doc) return fail(409, "Commercial license terms are not published");
+  const skillGateMatch = path.match(/^\\/api\\/admin\\/skill\\/releases\\/([A-Za-z0-9._-]{1,40})\\/gates$/);
+  if (skillGateMatch && method === "POST") {
+    const admin = await requireAdminMfa(request,env), b = await bodyJson(request,12000), version = skillGateMatch[1];
+    const gateType = String(b.gate_type || ""), evidence = String(b.evidence_reference || "").trim(), note = String(b.review_note || "").trim();
+    if (!["rights","security","installation"].includes(gateType)) return fail(400,"Invalid release gate type");
+    if (b.status !== "passed" || evidence.length < 8 || note.length < 20) return fail(400,"A passed gate requires a durable evidence reference and review note");
+    const release = await env.DB.prepare("SELECT sha256,status FROM skill_releases WHERE version=?").bind(version).first();
+    if (!release || release.status !== "candidate") return fail(404,"Candidate Skill release not found");
+    if (gateType === "rights") {
+      const review = await env.DB.prepare("SELECT manifest_file_count,approved_asset_count FROM commercial_rights_reviews WHERE product_version=? AND package_sha256=? AND status='approved' ORDER BY created_at DESC LIMIT 1").bind(version,release.sha256).first();
+      const pending = await env.DB.prepare("SELECT COUNT(*) AS count FROM commercial_rights_assets WHERE product_version=? AND included_in_package=1 AND status!='approved'").bind(version).first();
+      if (!review || Number(review.manifest_file_count)!==Number(review.approved_asset_count) || Number(pending.count)!==0) return fail(409,"Rights gate requires a matching approved package review and every included file approved");
     }
-    const artifact = await env.DB.prepare("SELECT product_id FROM product_artifacts WHERE product_id=?").bind(order.product_id).first();
-    if (!artifact) return fail(409, "Package must be uploaded before approval");
-    const key = "MSK3-" + randomToken(24).toUpperCase();
-    const licenseId = crypto.randomUUID(), keyHash = await digest(key), now = nowIso();
-    await env.DB.batch([
-      env.DB.prepare("INSERT INTO licenses (id,user_id,order_id,product_id,license_type,license_key_hash,license_key_prefix,status,seats,issued_at,created_at) VALUES (?,?,?,?,?,?,?,'active',1,?,?)")
-        .bind(licenseId, order.user_id, order.id, order.product_id, order.requested_license_type, keyHash, key.slice(0, 9), now, now),
-      env.DB.prepare("UPDATE orders SET status='approved',updated_at=? WHERE id=?").bind(now, id),
-      env.DB.prepare("INSERT INTO audit_log (id,actor_user_id,action,target_type,target_id,detail_json,created_at) VALUES (?,?,?,?,?,?,?)")
-        .bind(crypto.randomUUID(), admin.id, "admin.order.approve", "order", id, JSON.stringify({ license_id: licenseId, license_type: order.requested_license_type }), now)
-    ]);
-    return json({ ok: true, license_id: licenseId, license_key: key, notice: "This key is shown once. Store it securely and provide it to the licensee." });
+    await env.DB.prepare("INSERT INTO release_gate_records (id,skill_release_version,gate_type,status,evidence_reference,reviewer_user_id,review_note,created_at) VALUES (?,?,?,'passed',?,?,?,?)")
+      .bind(crypto.randomUUID(),version,gateType,evidence,admin.id,note,nowIso()).run();
+    await audit(env,admin.id,"skill.release.gate_passed","skill_release",version,{gate_type:gateType,evidence_reference:evidence});
+    return json({ok:true,version,gate_type:gateType});
   }
 
-  const rejectMatch = path.match(/^\/api\/admin\/orders\/([0-9a-f-]+)\/reject$/);
-  if (rejectMatch && method === "POST") return fail(410,"Legacy Skill orders are read-only.");
-  if (rejectMatch && method === "POST" && false) {
-    const admin = await requireAdminMfa(request, env), b = await bodyJson(request), id = rejectMatch[1];
-    await env.DB.prepare("UPDATE orders SET status='rejected',admin_note=?,updated_at=? WHERE id=? AND status='pending_review'")
-      .bind(String(b.note || "").slice(0, 500), nowIso(), id).run();
-    await audit(env, admin.id, "admin.order.reject", "order", id);
-    return json({ ok: true });
+  const skillPublishMatch = path.match(/^\\/api\\/admin\\/skill\\/releases\\/([A-Za-z0-9._-]{1,40})\\/publish$/);
+  if (skillPublishMatch && method === "POST") {
+    const admin = await requireAdminMfa(request,env), version = skillPublishMatch[1];
+    const release = await env.DB.prepare("SELECT version,file_path,sha256,status FROM skill_releases WHERE version=?").bind(version).first();
+    if (!release || release.status !== "candidate" || !release.file_path) return fail(409,"Candidate release and verified asset path are required");
+    const gateRows = rows(await env.DB.prepare("SELECT gate_type,COUNT(*) AS count FROM release_gate_records WHERE skill_release_version=? AND status='passed' GROUP BY gate_type").bind(version).all());
+    const passed = new Set(gateRows.map(x=>x.gate_type));
+    if (!["rights","security","installation"].every(x=>passed.has(x))) return fail(409,"Rights, security and installation gates must all pass for this exact version");
+    const review = await env.DB.prepare("SELECT manifest_file_count,approved_asset_count FROM commercial_rights_reviews WHERE product_version=? AND package_sha256=? AND status='approved' ORDER BY created_at DESC LIMIT 1").bind(version,release.sha256).first();
+    const pending = await env.DB.prepare("SELECT COUNT(*) AS count FROM commercial_rights_assets WHERE product_version=? AND included_in_package=1 AND status!='approved'").bind(version).first();
+    if (!review || Number(review.manifest_file_count)!==Number(review.approved_asset_count) || Number(pending.count)!==0) return fail(409,"The exact package does not have complete file-level rights clearance");
+    const asset = await env.ASSETS.fetch(new Request(new URL(release.file_path,url.origin).toString()));
+    if (!asset.ok) return fail(404,"Release archive is missing from static assets");
+    const bytes = await asset.arrayBuffer();
+    if (await digestBytes(bytes)!==release.sha256) return fail(409,"Release archive checksum mismatch");
+    await env.DB.prepare("UPDATE skill_releases SET status='published',published_at=? WHERE version=? AND status='candidate'").bind(nowIso(),version).run();
+    await audit(env,admin.id,"skill.release.published","skill_release",version,{sha256:release.sha256,file_path:release.file_path});
+    return json({ok:true,version,status:"published",sha256:release.sha256});
   }
 
-  if (path === "/api/admin/artifacts/upload" && method === "POST") return fail(410,"Legacy Skill package uploads are retired; use the reviewed public release process.");
-  if (path === "/api/admin/artifacts/upload" && method === "POST" && false) {
-    const admin = await requireAdminMfa(request, env), b = await bodyJson(request, 1500000);
-    const productId = String(b.product_id || ""), fileName = String(b.file_name || "");
-    const content = String(b.content_base64 || ""), sha = String(b.sha256 || "").toLowerCase();
-    if (productId !== "morningstar-skill-v3" || fileName !== "MorningStar-Skill-v3.0.0-Commercial.zip") return fail(400, "Unexpected product or package file name");
-    if (!content || content.length > 1300000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(content)) return fail(413, "Invalid or oversized base64 package");
-    const bytes = Uint8Array.from(atob(content), c => c.charCodeAt(0));
-    if (bytes.length > 1024 * 1024) return fail(413, "Package exceeds 1 MiB D1 storage threshold");
-    const actual = await digestBytes(bytes);
-    if (!same(actual, sha)) return fail(400, "SHA-256 verification failed");
-    await env.DB.prepare("INSERT INTO product_artifacts (product_id,content_base64,sha256,updated_at) VALUES (?,?,?,?) ON CONFLICT(product_id) DO UPDATE SET content_base64=excluded.content_base64,sha256=excluded.sha256,updated_at=excluded.updated_at")
-      .bind(productId, content, actual, nowIso()).run();
-    await audit(env, admin.id, "admin.artifact.upload", "product", productId, { sha256: actual, bytes: bytes.length });
-    return json({ ok: true, sha256: actual, bytes: bytes.length });
-  }
-
-  if (path === "/api/admin/commercial/publish" && method === "POST") return fail(410,"Commercial licensing for the legacy Skill product is disabled; use the separate Model Series license workflow.");
-  if (path === "/api/admin/commercial/publish" && method === "POST" && false) {
-    const admin = await requireAdmin(request, env), b = await bodyJson(request, 12000);
-    const rights = String(b.rights_scope || "").trim(), body = String(b.terms_body || "").trim();
-    if (b.confirmation !== true) return fail(400, "Rights confirmation is required");
-    if (rights.length < 100 || body.length < 500 || body.length > 10000) return fail(400, "Rights scope must be 100+ characters and final terms 500–10000 characters");
-    if (!/CC BY-NC-ND/i.test(body) || !/(exclude|excluded|不包含|排除)/i.test(body)) return fail(400, "Terms must explicitly preserve and exclude the original CC BY-NC-ND layer");
-    const docId = "ms-commercial-terms-" + String(b.terms_version || "commercial-1.0").replace(/[^A-Za-z0-9._-]/g, "");
-    const now = nowIso();
-    await env.DB.batch([
-      env.DB.prepare("UPDATE legal_documents SET status='retired' WHERE license_scope='commercial_additions' AND status='published'"),
-      env.DB.prepare("INSERT INTO legal_documents (id,title,version,license_scope,status,body,created_at,published_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET status='published',body=excluded.body,published_at=excluded.published_at")
-        .bind(docId, "MorningStar commercial additions license", String(b.terms_version || "commercial-1.0"), "commercial_additions", "published", "RIGHTS SCOPE:\n" + rights + "\n\nTERMS:\n" + body, now, now),
-      env.DB.prepare("UPDATE products SET commercial_enabled=1 WHERE id='morningstar-skill-v3'"),
-      env.DB.prepare("INSERT INTO audit_log (id,actor_user_id,action,target_type,target_id,detail_json,created_at) VALUES (?,?,?,?,?,?,?)")
-        .bind(crypto.randomUUID(), admin.id, "admin.commercial_terms.publish", "legal_document", docId, JSON.stringify({ rights_scope: rights }), now)
-    ]);
-    return json({ ok: true, terms_id: docId, warning: "Terms published by administrator assertion. Independent legal review is still recommended." });
-  }
-
+  if (path.startsWith("/api/model/")) return fail(503,"MorningStar AI Model Series is not enabled. Its separate identity, reviewed legal documents, private R2 storage, inference runtime and security tests must be completed first.");
   return fail(404, "API route not found");
+
 }
 
 export default {
