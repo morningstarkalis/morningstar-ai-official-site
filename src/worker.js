@@ -584,25 +584,55 @@ async function handle(request, env) {
     if (!same(supplied, env.ADMIN_BOOTSTRAP_TOKEN)) return fail(403, "Bootstrap token invalid");
     const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM users WHERE role='admin'").first();
     if (Number(count.count) > 0) return fail(409, "Administrator already initialized");
-    const b = await bodyJson(request, 2000);
+    const b = await bodyJson(request, 3000);
     const password = b.password;
     if (!validPassword(password)) return fail(400, "Preflight password must be 14 to 160 characters");
-    const salt = randomHex(16);
-    const started = Date.now();
-    const storedHash = await hashPassword(password, salt);
-    const checked = await verifyPassword(password, salt, storedHash, 0);
-    const elapsedMs = Date.now() - started;
-    if (!checked.valid || checked.needsRehash || checked.unsupported) {
-      throw new Error("Password KDF preflight round-trip failed");
+
+    // Perform only one KDF operation per HTTP request so the measured operation
+    // matches the production bootstrap/login CPU envelope.
+    if (b.mode === "hash") {
+      const salt = randomHex(16);
+      const started = Date.now();
+      const storedHash = await hashPassword(password, salt);
+      const elapsedMs = Date.now() - started;
+      if (!storedHash.startsWith("scrypt$v1$N=16384,r=8,p=5$")) {
+        throw new Error("Password KDF produced an unexpected versioned hash");
+      }
+      return json({
+        ok: true,
+        mode: "hash",
+        kdf: "scrypt",
+        format: "scrypt$v1",
+        round_trip_ms: elapsedMs,
+        salt,
+        hash: storedHash,
+        database_write: false,
+        administrator_created: false
+      });
     }
-    return json({
-      ok: true,
-      kdf: "scrypt",
-      format: "scrypt$v1",
-      round_trip_ms: elapsedMs,
-      database_write: false,
-      administrator_created: false
-    });
+
+    if (b.mode === "verify") {
+      if (typeof b.salt !== "string" || typeof b.hash !== "string") {
+        return fail(400, "Preflight salt and hash are required");
+      }
+      const started = Date.now();
+      const checked = await verifyPassword(password, b.salt, b.hash, 0);
+      const elapsedMs = Date.now() - started;
+      if (!checked.valid || checked.needsRehash || checked.unsupported) {
+        throw new Error("Password KDF preflight verification failed");
+      }
+      return json({
+        ok: true,
+        mode: "verify",
+        kdf: "scrypt",
+        format: "scrypt$v1",
+        round_trip_ms: elapsedMs,
+        database_write: false,
+        administrator_created: false
+      });
+    }
+
+    return fail(400, "Preflight mode must be hash or verify");
   }
 
   if (path === "/api/admin/bootstrap" && method === "POST") {
