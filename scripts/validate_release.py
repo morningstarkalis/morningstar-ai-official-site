@@ -11,6 +11,7 @@ MIGRATIONS = [
     "0003_rights_and_model_controls.sql",
     "0004_rc7_rights_inventory.sql",
     "0005_release_gates_and_retention.sql",
+    "0006_model_api_quotas_and_legal_review.sql",
 ]
 
 db = sqlite3.connect(":memory:")
@@ -32,7 +33,7 @@ required = {
     "model_orders", "model_licenses", "model_api_keys", "model_artifacts",
     "model_api_usage", "commercial_rights_assets", "commercial_rights_reviews",
     "admin_mfa_state", "release_gate_records", "retention_policy_records",
-    "privacy_requests", "consent_receipts",
+    "privacy_requests", "consent_receipts", "model_api_quotas",
 }
 missing = sorted(required - tables)
 if missing:
