@@ -127,6 +127,293 @@ async function authenticateModelApiKey(request,env,scope){
   await env.DB.prepare("UPDATE model_api_keys SET last_used_at=? WHERE id=?").bind(now,row.id).run();
   return row;
 }
+
+async function handleModelApi(request,env,url,path,method){
+  if(path==="/api/model/catalog"&&method==="GET"){
+    const products=rows(await env.DB.prepare("SELECT id,title,version,description FROM model_products WHERE status='available' AND commercial_enabled=1 ORDER BY created_at DESC").all());
+    return json({product_line:"MorningStar AI Model Series",access:"commercial",products});
+  }
+
+  if(path==="/api/model/auth/register"&&method==="POST"){
+    if(env.MODEL_SERIES_ENABLED!=="true")return fail(503,"Model Series registration is not enabled");
+    const b=await bodyJson(request,12000),email=cleanEmail(b.email),name=String(b.display_name||"").trim(),password=b.password;
+    if(!validEmail(email)||!name||name.length>80||!validPassword(password))return fail(400,"Valid email, display name and password (14+ characters) are required");
+    const privacy=await env.DB.prepare("SELECT id,version FROM model_legal_documents WHERE scope='privacy_notice' AND status='published' ORDER BY published_at DESC LIMIT 1").first();
+    const terms=await env.DB.prepare("SELECT id,version FROM model_legal_documents WHERE scope='terms_of_service' AND status='published' ORDER BY published_at DESC LIMIT 1").first();
+    if(!privacy||!terms||b.privacy_notice_version!==privacy.version||b.terms_version!==terms.version||b.consent!==true)return fail(409,"Current privacy notice and terms must be accepted before registration");
+    const emailKey=await digest(email),since=new Date(Date.now()-15*60*1000).toISOString();
+    const attempts=await env.DB.prepare("SELECT COUNT(*) AS count FROM registration_attempts WHERE email_key=? AND attempted_at>?").bind(emailKey,since).first();
+    if(Number(attempts.count)>=5)return fail(429,"Too many registration attempts; retry later");
+    await env.DB.prepare("INSERT INTO registration_attempts (email_key,attempted_at) VALUES (?,?)").bind(emailKey,nowIso()).run();
+    const salt=randomHex(16),hash=await passwordHash(password,salt),id=crypto.randomUUID(),now=nowIso();
+    try{
+      await env.DB.prepare("INSERT INTO model_members (id,email,display_name,password_salt,password_hash,password_iterations,status,email_verified,privacy_notice_version,created_at,updated_at) VALUES (?,?,?,?,?,?,'pending_verification',0,?,?,?)")
+        .bind(id,email,name,salt,hash,PBKDF2_ITERATIONS,privacy.version,now,now).run();
+    }catch(e){if(String(e.message).includes("UNIQUE"))return fail(409,"Email is already registered");throw e;}
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO consent_receipts (id,subject_type,subject_id,document_id,document_version,purpose,accepted_at) VALUES (?,?,?,?,?,'account_registration',?)").bind(crypto.randomUUID(),"model_member",id,privacy.id,privacy.version,now),
+      env.DB.prepare("INSERT INTO consent_receipts (id,subject_type,subject_id,document_id,document_version,purpose,accepted_at) VALUES (?,?,?,?,?,'terms_of_service',?)").bind(crypto.randomUUID(),"model_member",id,terms.id,terms.version,now)
+    ]);
+    return json({ok:true,status:"pending_verification",message:"Registration received. Account activation requires administrator verification."},202);
+  }
+
+  if(path==="/api/model/auth/login"&&method==="POST"){
+    if(env.MODEL_SERIES_ENABLED!=="true")return fail(503,"Model Series sign-in is not enabled");
+    const b=await bodyJson(request),email=cleanEmail(b.email),password=String(b.password||"");
+    if(!validEmail(email)||!password)return fail(400,"Invalid email or password");
+    const emailKey=await digest(email),since=new Date(Date.now()-15*60*1000).toISOString();
+    const attempts=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_auth_attempts WHERE email_key=? AND attempted_at>?").bind(emailKey,since).first();
+    if(Number(attempts.count)>=8)return fail(429,"Too many login attempts; retry in 15 minutes");
+    await env.DB.prepare("INSERT INTO model_auth_attempts (email_key,attempted_at) VALUES (?,?)").bind(emailKey,nowIso()).run();
+    const member=await env.DB.prepare("SELECT id,email,display_name,password_salt,password_hash,password_iterations,status,email_verified FROM model_members WHERE email=?").bind(email).first();
+    const calculated=member?await passwordHash(password,member.password_salt,member.password_iterations):await passwordHash(password,"00000000000000000000000000000000");
+    if(!member||!same(calculated,member.password_hash)||member.status!=="active"||!member.email_verified)return fail(401,"Invalid credentials or account not verified");
+    if(Number(member.password_iterations)<PBKDF2_ITERATIONS){
+      const salt=randomHex(16),hash=await passwordHash(password,salt,PBKDF2_ITERATIONS);
+      await env.DB.prepare("UPDATE model_members SET password_salt=?,password_hash=?,password_iterations=?,updated_at=? WHERE id=?").bind(salt,hash,PBKDF2_ITERATIONS,nowIso(),member.id).run();
+    }
+    await env.DB.prepare("DELETE FROM model_auth_attempts WHERE email_key=?").bind(emailKey).run();
+    const session=await createModelSession(env,member.id);
+    await audit(env,member.id,"model_member.login","model_member",member.id);
+    return json({user:{id:member.id,email:member.email,display_name:member.display_name}},200,{"Set-Cookie":modelSessionCookie(session.token,MODEL_SESSION_HOURS*3600)});
+  }
+
+  if(path==="/api/model/auth/logout"&&method==="POST"){
+    const token=cookie(request,MODEL_SESSION_COOKIE);
+    if(token)await env.DB.prepare("DELETE FROM model_sessions WHERE token_hash=?").bind(await digest(token)).run();
+    return json({ok:true},200,{"Set-Cookie":modelSessionCookie("",0)});
+  }
+
+  if(path==="/api/model/me"&&method==="GET"){
+    const member=await requireModelMember(request,env);
+    const licenses=rows(await env.DB.prepare("SELECT l.id,l.license_type,l.scopes_json,l.status,l.issued_at,l.expires_at,p.title,p.version FROM model_licenses l JOIN model_products p ON p.id=l.model_product_id WHERE l.model_member_id=? ORDER BY l.issued_at DESC").bind(member.id).all());
+    const keys=rows(await env.DB.prepare("SELECT id,key_prefix,scopes_json,created_at,expires_at,last_used_at,revoked_at FROM model_api_keys WHERE model_member_id=? ORDER BY created_at DESC").bind(member.id).all());
+    const orders=rows(await env.DB.prepare("SELECT id,requested_license_type,terms_version,status,amount_minor,currency,created_at,updated_at FROM model_orders WHERE model_member_id=? ORDER BY created_at DESC LIMIT 30").bind(member.id).all());
+    return json({user:{id:member.id,email:member.email,display_name:member.display_name},licenses,api_keys:keys,orders});
+  }
+
+  if(path==="/api/model/orders"&&method==="POST"){
+    if(env.MODEL_ORDER_REQUESTS_ENABLED!=="true")return fail(503,"Commercial order requests are not enabled");
+    const member=await requireModelMember(request,env),b=await bodyJson(request,12000);
+    const product=await env.DB.prepare("SELECT id,status,commercial_enabled FROM model_products WHERE id=?").bind(String(b.model_product_id||"")).first();
+    const terms=await env.DB.prepare("SELECT id,version FROM model_legal_documents WHERE scope='commercial_model_license' AND status='published' AND version=?").bind(String(b.terms_version||"")).first();
+    if(!product||product.status!=="available"||Number(product.commercial_enabled)!==1)return fail(409,"Model product is not available for commercial orders");
+    if(!terms)return fail(409,"The exact commercial model license terms must be published");
+    const type=String(b.license_type||"commercial_api");
+    if(!["commercial_api","commercial_deployment"].includes(type))return fail(400,"Invalid license type");
+    const id=crypto.randomUUID(),now=nowIso();
+    await env.DB.prepare("INSERT INTO model_orders (id,model_member_id,model_product_id,requested_license_type,terms_version,status,payment_reference,amount_minor,currency,created_at,updated_at) VALUES (?,?,?,?,?,'pending_review',NULL,NULL,'TWD',?,?)")
+      .bind(id,member.id,product.id,type,terms.version,now,now).run();
+    await audit(env,member.id,"model.order.requested","model_order",id,{license_type:type,terms_version:terms.version});
+    return json({ok:true,order_id:id,status:"pending_review",message:"This is a commercial license request, not a completed payment or active license."},201);
+  }
+
+  if(path==="/api/model/api-keys"&&method==="POST"){
+    const member=await requireModelMember(request,env),b=await bodyJson(request,12000),licenseId=String(b.license_id||"");
+    const license=await env.DB.prepare("SELECT l.id,l.scopes_json,l.expires_at,l.status,p.status AS product_status,p.commercial_enabled FROM model_licenses l JOIN model_products p ON p.id=l.model_product_id WHERE l.id=? AND l.model_member_id=?").bind(licenseId,member.id).first();
+    if(!license||license.status!=="active"||(license.expires_at&&license.expires_at<=nowIso())||license.product_status!=="available"||Number(license.commercial_enabled)!==1)return fail(403,"No active commercial license for this product");
+    let allowed=[];try{allowed=JSON.parse(license.scopes_json||"[]");}catch(_){}
+    const scopes=Array.isArray(b.scopes)?[...new Set(b.scopes.map(String))]:[];
+    if(!scopes.length||scopes.some(x=>!["inference","usage","download"].includes(x)||!allowed.includes(x)))return fail(403,"Requested API scopes exceed the active license");
+    const active=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_api_keys WHERE model_license_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)").bind(licenseId,nowIso()).first();
+    if(Number(active.count)>=5)return fail(429,"Maximum active API keys reached for this license");
+    const expiresAt=b.expires_at?new Date(b.expires_at).toISOString():null;
+    if(expiresAt&&new Date(expiresAt).getTime()>Date.now()+90*86400000)return fail(400,"API key expiry cannot exceed 90 days");
+    const issued=await issueModelApiKey(env,member.id,licenseId,scopes,expiresAt);
+    await audit(env,member.id,"model.api_key.issued","model_api_key",issued.id,{scopes,expires_at:expiresAt});
+    return json({ok:true,...issued},201);
+  }
+
+  const modelKeyRevoke=path.match(/^\/api\/model\/api-keys\/([0-9a-f-]+)\/revoke$/);
+  if(modelKeyRevoke&&method==="POST"){
+    const member=await requireModelMember(request,env),id=modelKeyRevoke[1];
+    const result=await env.DB.prepare("UPDATE model_api_keys SET revoked_at=? WHERE id=? AND model_member_id=? AND revoked_at IS NULL").bind(nowIso(),id,member.id).run();
+    if(!result.meta?.changes)return fail(404,"Active API key not found");
+    await audit(env,member.id,"model.api_key.revoked","model_api_key",id);
+    return json({ok:true});
+  }
+
+  if(path==="/api/model/v1/infer"&&method==="POST"){
+    const key=await authenticateModelApiKey(request,env,"inference");
+    if(!env.MODEL_INFERENCE||!env.MODEL_INFERENCE_SECRET)return fail(503,"Model inference runtime is not configured");
+    const body=await bodyJson(request,MAX_MODEL_API_BODY);
+    if(body.input===undefined||body.input===null)return fail(400,"An input field is required");
+    const quota=await env.DB.prepare("SELECT daily_request_limit,monthly_input_units_limit,monthly_output_units_limit FROM model_api_quotas WHERE model_license_id=?").bind(key.model_license_id).first();
+    if(!quota)return fail(503,"No API quota is configured for this license");
+    const daily=await env.DB.prepare("SELECT COUNT(*) AS count FROM model_api_usage WHERE model_api_key_id=? AND usage_type='inference' AND created_at>=date('now')").bind(key.id).first();
+    const monthly=await env.DB.prepare("SELECT COALESCE(SUM(input_units),0) AS input_units,COALESCE(SUM(output_units),0) AS output_units FROM model_api_usage WHERE model_api_key_id=? AND usage_type='inference' AND created_at>=date('now','start of month')").bind(key.id).first();
+    if(Number(daily.count)>=Number(quota.daily_request_limit)||Number(monthly.input_units)>=Number(quota.monthly_input_units_limit)||Number(monthly.output_units)>=Number(quota.monthly_output_units_limit))return fail(429,"API quota exceeded");
+    const requestId=crypto.randomUUID();
+    let upstream;
+    try{
+      upstream=await env.MODEL_INFERENCE.fetch(new Request("https://model-inference.internal/v1/infer",{method:"POST",headers:{"Content-Type":"application/json","X-MorningStar-Internal-Secret":env.MODEL_INFERENCE_SECRET,"X-MorningStar-Request-Id":requestId},body:JSON.stringify({model_product_id:key.model_product_id,input:body.input,parameters:body.parameters||{}})}));
+    }catch(_){return fail(502,"Model inference runtime could not be reached");}
+    if(!upstream.ok)return fail(502,"Model inference runtime returned an error");
+    let result;try{result=await upstream.json();}catch(_){return fail(502,"Model inference runtime returned invalid JSON");}
+    const inputUnits=Number.isSafeInteger(result.usage?.input_units)?result.usage.input_units:0;
+    const outputUnits=Number.isSafeInteger(result.usage?.output_units)?result.usage.output_units:0;
+    await env.DB.prepare("INSERT INTO model_api_usage (id,model_api_key_id,model_member_id,model_product_id,request_id,usage_type,input_units,output_units,created_at) VALUES (?,?,?,?,?,'inference',?,?,?)")
+      .bind(crypto.randomUUID(),key.id,key.model_member_id,key.model_product_id,requestId,inputUnits,outputUnits,nowIso()).run();
+    return json({request_id:requestId,output:result.output??result,usage:{input_units:inputUnits,output_units:outputUnits}});
+  }
+
+  if(path==="/api/model/v1/usage"&&method==="GET"){
+    const key=await authenticateModelApiKey(request,env,"usage");
+    const usage=rows(await env.DB.prepare("SELECT request_id,usage_type,input_units,output_units,created_at FROM model_api_usage WHERE model_api_key_id=? AND created_at>=datetime('now','-30 days') ORDER BY created_at DESC LIMIT 500").bind(key.id).all());
+    return json({usage});
+  }
+
+  const artifactDownload=path.match(/^\/api\/model\/artifacts\/([0-9a-f-]+)\/download$/);
+  if(artifactDownload&&method==="GET"){
+    const member=await requireModelMember(request,env),id=artifactDownload[1];
+    if(!env.MODEL_ARTIFACTS)return fail(503,"Private artifact storage is not configured");
+    const artifact=await env.DB.prepare("SELECT a.*,p.status AS product_status,p.commercial_enabled FROM model_artifacts a JOIN model_products p ON p.id=a.model_product_id WHERE a.id=? AND a.status='available'").bind(id).first();
+    if(!artifact||artifact.product_status!=="available"||Number(artifact.commercial_enabled)!==1)return fail(404,"Available private artifact not found");
+    const licenses=rows(await env.DB.prepare("SELECT scopes_json FROM model_licenses WHERE model_member_id=? AND model_product_id=? AND status='active' AND (expires_at IS NULL OR expires_at>?)").bind(member.id,artifact.model_product_id,nowIso()).all());
+    const allowed=licenses.some(l=>{try{return JSON.parse(l.scopes_json||"[]").includes("download");}catch(_){return false;}});
+    if(!allowed)return fail(403,"An active download entitlement is required");
+    const object=await env.MODEL_ARTIFACTS.get(artifact.object_key);
+    if(!object)return fail(404,"Private artifact object is missing");
+    const bytes=await object.arrayBuffer();
+    if(await digestBytes(bytes)!==artifact.sha256)return fail(503,"Private artifact integrity check failed");
+    const filename=String(artifact.file_name).replace(/[^A-Za-z0-9._-]/g,"_");
+    await audit(env,member.id,"model.artifact.downloaded","model_artifact",id,{sha256:artifact.sha256});
+    return new Response(bytes,{status:200,headers:{"Content-Type":"application/zip","Content-Disposition":"attachment; filename="+filename,"Content-Length":String(bytes.byteLength),"Cache-Control":"private, no-store","Pragma":"no-cache","X-Content-Type-Options":"nosniff","X-MorningStar-SHA256":artifact.sha256}});
+  }
+
+  if(path==="/api/model/privacy-requests"&&method==="POST"){
+    const member=await requireModelMember(request,env),b=await bodyJson(request,12000),type=String(b.request_type||"");
+    if(!["access","copy","correction","stop_processing","deletion","restriction","objection","portability"].includes(type))return fail(400,"Invalid privacy request type");
+    const id=crypto.randomUUID(),now=nowIso();
+    await env.DB.prepare("INSERT INTO privacy_requests (id,subject_type,subject_id,request_type,details,status,created_at,updated_at) VALUES (?,'model_member',?,?,?,'pending',?,?)").bind(id,member.id,type,String(b.details||"").slice(0,4000),now,now).run();
+    await audit(env,member.id,"model.privacy_request.created","privacy_request",id,{request_type:type});
+    return json({ok:true,request_id:id,status:"pending"},201);
+  }
+
+  return fail(404,"Model Series API route not found");
+}
+
+async function handleAdminModelApi(request,env,path,method){
+  if(path==="/api/admin/model/overview"&&method==="GET"){
+    const admin=await requireAdminMfa(request,env);
+    const products=rows(await env.DB.prepare("SELECT id,title,version,status,commercial_enabled FROM model_products ORDER BY created_at DESC").all());
+    const docs=rows(await env.DB.prepare("SELECT id,title,version,scope,status,review_evidence_reference,published_at FROM model_legal_documents ORDER BY created_at DESC").all());
+    const counts=await env.DB.prepare("SELECT (SELECT COUNT(*) FROM model_members) AS members,(SELECT COUNT(*) FROM model_members WHERE status='pending_verification') AS pending_members,(SELECT COUNT(*) FROM model_orders) AS orders,(SELECT COUNT(*) FROM model_orders WHERE status='pending_review') AS pending_orders,(SELECT COUNT(*) FROM model_licenses WHERE status='active') AS active_licenses,(SELECT COUNT(*) FROM model_artifacts) AS artifacts,(SELECT COUNT(*) FROM model_artifacts WHERE status='quarantined') AS quarantined_artifacts").first();
+    return json({administrator:admin.email,products,legal_documents:docs,counts});
+  }
+
+  if(path==="/api/admin/model/legal-documents"&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,50000);
+    const scope=String(b.scope||""),id=String(b.id||"").replace(/[^A-Za-z0-9._-]/g,""),title=String(b.title||"").trim(),version=String(b.version||"").trim(),body=String(b.body||"").trim(),evidence=String(b.review_evidence_reference||"").trim();
+    if(!["privacy_notice","terms_of_service","commercial_model_license","api_terms","dpa"].includes(scope)||!id||!title||!version||body.length<500||evidence.length<8)return fail(400,"Document scope, ID, title, version, 500+ characters of terms and external legal review evidence are required");
+    const now=nowIso();
+    await env.DB.prepare("INSERT INTO model_legal_documents (id,title,version,scope,status,body,created_at,published_at,review_evidence_reference,reviewed_by,reviewed_at) VALUES (?,?,?,?,'published',?,?,?,?,?,?)")
+      .bind(id,title,version,scope,body,now,now,evidence,admin.id,now).run();
+    await audit(env,admin.id,"model.legal_document.published","model_legal_document",id,{scope,version,review_evidence_reference:evidence});
+    return json({ok:true,id,scope,version,status:"published"});
+  }
+
+  const memberVerify=path.match(/^\/api\/admin\/model\/members\/([0-9a-f-]+)\/verify$/);
+  if(memberVerify&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=memberVerify[1],evidence=String(b.evidence_reference||"").trim(),note=String(b.review_note||"").trim();
+    if(evidence.length<8||note.length<20)return fail(400,"Manual verification requires evidence reference and review note");
+    const result=await env.DB.prepare("UPDATE model_members SET status='active',email_verified=1,updated_at=? WHERE id=? AND status='pending_verification'").bind(nowIso(),id).run();
+    if(!result.meta?.changes)return fail(404,"Pending Model Series member not found");
+    await audit(env,admin.id,"model.member.verified","model_member",id,{evidence_reference:evidence,review_note:note});
+    return json({ok:true,id,status:"active"});
+  }
+
+  const productPublish=path.match(/^\/api\/admin\/model\/products\/([A-Za-z0-9._-]+)\/publish$/);
+  if(productPublish&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),id=productPublish[1];
+    if(!env.MODEL_INFERENCE||!env.MODEL_INFERENCE_SECRET||!env.MODEL_ARTIFACTS)return fail(503,"Model inference Service Binding, internal secret and private R2 bucket must all be configured");
+    for(const scope of ["privacy_notice","terms_of_service","commercial_model_license","api_terms"]){
+      const doc=await env.DB.prepare("SELECT id FROM model_legal_documents WHERE scope=? AND status='published' ORDER BY published_at DESC LIMIT 1").bind(scope).first();
+      if(!doc)return fail(409,"Missing published legal document: "+scope);
+    }
+    const artifact=await env.DB.prepare("SELECT id FROM model_artifacts WHERE model_product_id=? AND status='available' LIMIT 1").bind(id).first();
+    if(!artifact)return fail(409,"At least one reviewed private model artifact must be available");
+    const result=await env.DB.prepare("UPDATE model_products SET status='available',commercial_enabled=1,updated_at=? WHERE id=? AND status='draft'").bind(nowIso(),id).run();
+    if(!result.meta?.changes)return fail(404,"Draft Model Series product not found");
+    await audit(env,admin.id,"model.product.published","model_product",id);
+    return json({ok:true,id,status:"available",commercial_enabled:true});
+  }
+
+  const orderApprove=path.match(/^\/api\/admin\/model\/orders\/([0-9a-f-]+)\/approve$/);
+  if(orderApprove&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=orderApprove[1];
+    const order=await env.DB.prepare("SELECT o.*,m.status AS member_status,m.email_verified,p.status AS product_status,p.commercial_enabled FROM model_orders o JOIN model_members m ON m.id=o.model_member_id JOIN model_products p ON p.id=o.model_product_id WHERE o.id=?").bind(id).first();
+    if(!order||order.status!=="pending_review")return fail(404,"Pending Model Series order not found");
+    if(order.member_status!=="active"||!order.email_verified||order.product_status!=="available"||Number(order.commercial_enabled)!==1)return fail(409,"Verified member and published commercial product are required");
+    const terms=await env.DB.prepare("SELECT id FROM model_legal_documents WHERE scope='commercial_model_license' AND version=? AND status='published'").bind(order.terms_version).first();
+    if(!terms)return fail(409,"The order's exact commercial license terms are not published");
+    const payment=String(b.payment_reference||"").trim(),contract=String(b.contract_reference||"").trim(),note=String(b.review_note||"").trim();
+    if(payment.length<6||contract.length<6||note.length<20)return fail(400,"Payment/settlement reference, signed contract reference and review note are required");
+    const scopes=Array.isArray(b.scopes)?[...new Set(b.scopes.map(String))]:["inference","usage"];
+    if(!scopes.length||scopes.some(x=>!["inference","usage","download"].includes(x)))return fail(400,"Invalid license scopes");
+    const key="MSML_"+randomToken(24),licenseId=crypto.randomUUID(),now=nowIso(),keyHash=await digest(key);
+    const expiresAt=b.expires_at?new Date(b.expires_at).toISOString():null;
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO model_licenses (id,model_member_id,model_order_id,model_product_id,license_type,license_key_hash,license_key_prefix,scopes_json,status,issued_at,expires_at,created_at) VALUES (?,?,?,?,?,?,?,?, 'active',?,?,?)").bind(licenseId,order.model_member_id,order.id,order.model_product_id,order.requested_license_type,keyHash,key.slice(0,12),JSON.stringify(scopes),now,expiresAt,now),
+      env.DB.prepare("INSERT INTO model_api_quotas (model_license_id,daily_request_limit,monthly_input_units_limit,monthly_output_units_limit,updated_at) VALUES (?,?,?,?,?)").bind(licenseId,Number(b.daily_request_limit)||100,Number(b.monthly_input_units_limit)||100000,Number(b.monthly_output_units_limit)||100000,now),
+      env.DB.prepare("UPDATE model_orders SET status='approved',payment_reference=?,admin_note=?,updated_at=? WHERE id=? AND status='pending_review'").bind(payment,"Contract: "+contract+"\n"+note,now,id)
+    ]);
+    await audit(env,admin.id,"model.order.approved","model_order",id,{license_id:licenseId,scopes,payment_reference:payment,contract_reference:contract});
+    return json({ok:true,license_id:licenseId,license_key:key,scopes,notice:"License key is shown once. Save it securely."});
+  }
+
+  const orderReject=path.match(/^\/api\/admin\/model\/orders\/([0-9a-f-]+)\/reject$/);
+  if(orderReject&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=orderReject[1],note=String(b.note||"").trim();
+    if(note.length<10)return fail(400,"A rejection reason is required");
+    const result=await env.DB.prepare("UPDATE model_orders SET status='rejected',admin_note=?,updated_at=? WHERE id=? AND status='pending_review'").bind(note,nowIso(),id).run();
+    if(!result.meta?.changes)return fail(404,"Pending Model Series order not found");
+    await audit(env,admin.id,"model.order.rejected","model_order",id,{note});
+    return json({ok:true});
+  }
+
+  if(path==="/api/admin/model/artifacts/upload"&&method==="POST"){
+    const admin=await requireAdminMfa(request,env);
+    if(!env.MODEL_ARTIFACTS)return fail(503,"Private R2 bucket binding is not configured");
+    const form=await request.formData(),productId=String(form.get("model_product_id")||""),version=String(form.get("version")||""),file=form.get("file");
+    if(!productId||!version||!file||typeof file.arrayBuffer!=="function")return fail(400,"Product, version and ZIP file are required");
+    if(file.size<4||file.size>MAX_MODEL_ARTIFACT_BYTES||!String(file.name||"").toLowerCase().endsWith(".zip"))return fail(413,"ZIP file must be between 4 bytes and 25 MiB");
+    const product=await env.DB.prepare("SELECT id FROM model_products WHERE id=? AND status='draft'").bind(productId).first();
+    if(!product)return fail(404,"Draft Model Series product not found");
+    const bytes=await file.arrayBuffer(),magic=new Uint8Array(bytes.slice(0,4));
+    if(magic[0]!==0x50||magic[1]!==0x4b)return fail(400,"Uploaded file is not a ZIP archive");
+    const sha=await digestBytes(bytes),id=crypto.randomUUID(),key="quarantine/"+productId+"/"+id+".zip",now=nowIso();
+    await env.MODEL_ARTIFACTS.put(key,bytes,{httpMetadata:{contentType:"application/zip"}});
+    await env.DB.prepare("INSERT INTO model_artifacts (id,model_product_id,version,object_key,file_name,content_type,file_size,sha256,status,uploaded_by,uploaded_at) VALUES (?,?,?,?,?, 'application/zip',?,?,'quarantined',?,?)")
+      .bind(id,productId,version,key,String(file.name).replace(/[^A-Za-z0-9._-]/g,"_"),bytes.byteLength,sha,admin.id,now).run();
+    await audit(env,admin.id,"model.artifact.uploaded","model_artifact",id,{sha256:sha,bytes:bytes.byteLength});
+    return json({ok:true,id,status:"quarantined",sha256:sha,bytes:bytes.byteLength});
+  }
+
+  const artifactApprove=path.match(/^\/api\/admin\/model\/artifacts\/([0-9a-f-]+)\/approve$/);
+  if(artifactApprove&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=artifactApprove[1];
+    const scan=String(b.security_scan_reference||"").trim(),rights=String(b.rights_review_reference||"").trim(),note=String(b.review_note||"").trim();
+    if(scan.length<8||rights.length<8||note.length<20)return fail(400,"Independent malware scan, rights review evidence and review note are required");
+    const result=await env.DB.prepare("UPDATE model_artifacts SET status='available',security_scan_reference=?,rights_review_reference=?,reviewed_by=?,reviewed_at=?,approved_at=? WHERE id=? AND status='quarantined'").bind(scan,rights,admin.id,nowIso(),nowIso(),id).run();
+    if(!result.meta?.changes)return fail(404,"Quarantined artifact not found");
+    await audit(env,admin.id,"model.artifact.approved","model_artifact",id,{security_scan_reference:scan,rights_review_reference:rights});
+    return json({ok:true,id,status:"available"});
+  }
+
+  const licenseRevoke=path.match(/^\/api\/admin\/model\/licenses\/([0-9a-f-]+)\/revoke$/);
+  if(licenseRevoke&&method==="POST"){
+    const admin=await requireAdminMfa(request,env),b=await bodyJson(request,12000),id=licenseRevoke[1],note=String(b.reason||"").trim();
+    if(note.length<10)return fail(400,"Revocation reason is required");
+    const result=await env.DB.prepare("UPDATE model_licenses SET status='revoked',revoked_at=? WHERE id=? AND status='active'").bind(nowIso(),id).run();
+    if(!result.meta?.changes)return fail(404,"Active Model Series license not found");
+    await audit(env,admin.id,"model.license.revoked","model_license",id,{reason:note});
+    return json({ok:true});
+  }
+
+  return fail(404,"Model Series admin route not found");
+}
+
 function secureResponse(response){const h=new Headers(response.headers);h.set("X-Content-Type-Options","nosniff");h.set("X-Frame-Options","DENY");h.set("Referrer-Policy","strict-origin-when-cross-origin");h.set("Permissions-Policy","camera=(), microphone=(), geolocation=()");h.set("Cross-Origin-Resource-Policy","same-origin");h.set("Cross-Origin-Opener-Policy","same-origin");h.set("Strict-Transport-Security","max-age=31536000; includeSubDomains");h.set("Content-Security-Policy","default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self' https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'");return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
 async function privacySubject(request,env){const m=await getModelMember(request,env);if(m)return{type:"model_member",id:m.id,email:m.email};const u=await getUser(request,env);if(u)return{type:"member",id:u.id,email:u.email};return null;}
 
