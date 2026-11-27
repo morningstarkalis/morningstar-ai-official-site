@@ -127,6 +127,19 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#070b10;border:1px so
 <div class="field"><label>經法律審查的正式文件全文（至少 500 字）</label><textarea id="model-doc-body"></textarea></div>
 <button id="publish-model-doc">發布法律文件（需新 TOTP）</button>
 
+<h3>個資權利請求處理</h3>
+<p class="muted">此功能只建立案件處理紀錄；實際查詢、複製、更正、刪除、備份到期與第三方處理者刪除，仍須依已核准保存政策逐項完成。不得只按「完成」而未實際執行。</p>
+<button id="load-privacy-requests" class="secondary">載入待處理個資請求（需新 TOTP）</button>
+<pre id="privacy-requests-data"></pre>
+<div class="grid">
+<div class="field"><label>請求 ID</label><input id="privacy-request-id"></div>
+<div class="field"><label>處理狀態</label><select id="privacy-request-status"><option value="in_progress">處理中</option><option value="completed">完成</option><option value="partially_refused">部分拒絕</option><option value="refused">拒絕</option></select></div>
+<div class="field"><label>證據參照</label><input id="privacy-request-evidence"></div>
+<div class="field"><label>處理回覆與法定例外說明</label><textarea id="privacy-request-note"></textarea></div>
+</div>
+<label class="small"><input id="privacy-deletion-completed" type="checkbox"> 若為刪除請求，我已實際完成適用資料刪除並核對外部處理者與備份保留例外</label><br>
+<button id="resolve-privacy-request">記錄處理結果（需新 TOTP）</button>
+
 <h3>會員人工驗證</h3>
 <div class="grid">
 <div class="field"><label>會員 ID</label><input id="model-member-id"></div>
@@ -246,6 +259,8 @@ $('publish').addEventListener('click',async()=>{
  }catch(e){status('action-status',e.message,'error');}
 });
 
+$('load-privacy-requests').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/privacy-requests',undefined,otp,'GET');$('privacy-requests-data').textContent=JSON.stringify(d,null,2);status('action-status','個資權利請求清單已載入。','ok');}catch(e){status('action-status',e.message,'error');}});
+$('resolve-privacy-request').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/privacy-requests/'+encodeURIComponent($('privacy-request-id').value.trim())+'/resolve',{status:$('privacy-request-status').value,response_note:$('privacy-request-note').value,evidence_reference:$('privacy-request-evidence').value,deletion_completed:$('privacy-deletion-completed').checked},otp);status('action-status','個資請求處理紀錄：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
 $('model-overview').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/overview',undefined,otp,'GET');$('model-overview-data').textContent=JSON.stringify(d,null,2);status('action-status','Model Series 總覽已載入。','ok');}catch(e){status('action-status',e.message,'error');}});
 $('publish-model-doc').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/legal-documents',{id:$('model-doc-id').value,title:$('model-doc-title').value,version:$('model-doc-version').value,scope:$('model-doc-scope').value,body:$('model-doc-body').value,review_evidence_reference:$('model-doc-evidence').value},otp);status('action-status','法律文件發布結果：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
 $('verify-model-member').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/members/'+encodeURIComponent($('model-member-id').value.trim())+'/verify',{evidence_reference:$('model-member-evidence').value,review_note:$('model-member-note').value},otp);status('action-status','會員驗證結果：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
