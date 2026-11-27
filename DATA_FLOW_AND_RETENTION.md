@@ -14,8 +14,8 @@
 
 ## 1A. Feature-branch staging migration verification (2026-11-28)
 
-The seven schema migrations were applied to the isolated D1 database `morningstar-membership-staging-v311`. Read-only verification returned:
-- 7 migration records;
+The eight schema migrations were applied to the isolated D1 database `morningstar-membership-staging-v311`. Read-only verification returned:
+- 8 migration records;
 - 1 Skill release row (RC7 candidate);
 - 18 RC7 rights assets, all 18 still pending review;
 - 0 Model Series members, orders, licenses or API quotas;
