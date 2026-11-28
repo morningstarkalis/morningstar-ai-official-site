@@ -1,11 +1,24 @@
 # MorningStar Staging｜稽核紀錄與權限邊界修正 v1.0
 
-**文件狀態：** 開發分支修正已完成；Staging 發布與線上回歸測試待執行。  
+**文件狀態：** 原始修正紀錄；部署後驗收已於 2026-11-28 完成，現況以本文件開頭的更新附記及 [Staging Integration Acceptance Report v1.0](STAGING_INTEGRATION_ACCEPTANCE_REPORT_v1.0.md) 為準。  
 **適用 Worker：** `morningstar-ai-official-site-staging`  
 **適用 D1：** `morningstar-membership-staging-v311`  
 **開發分支：** `feature/two-product-lines-public-nc`  
 **PR：** [#2 — Build separated MorningStar products and sourced publication record](https://github.com/morningstarkalis/morningstar-ai-official-site/pull/2)  
 **Production：** 不在本次執行範圍內。
+
+> **部署後狀態更新｜2026-11-28（UTC）**
+>
+> 本文件第 4、6、8、9 節的「0009 尚未套用」、「Staging Worker 尚未部署」及「非管理員 HTTP 403 尚未完成」等敘述，是部署前的歷史狀態快照，已由後續驗收結果取代，不再代表目前狀態。
+>
+> - Migration 0009 的索引 DDL 已透過 Cloudflare D1 API 套用至 Staging D1，並以 `sqlite_master` 與 `PRAGMA index_info` 唯讀確認索引及欄位順序。Production 未套用。
+> - Staging Worker `morningstar-ai-official-site-staging` 已部署，Version ID 為 `2e6a3c62-261e-433b-8cb0-5a4e48fe11ec`，Deployment ID 為 `e10bcba6-5f0e-4b25-ba3a-c8f9aa36a8a5`，100% Staging 流量指向該版本。
+> - 登入限流、管理員登入、無效／有效／重播 TOTP、登出後 Session 失效及一般會員管理路由 HTTP 403 均已完成線上測試。
+> - 測試會員與 Session 清理後均為 0；非管理員拒絕稽核事件保留 1 筆；Staging active admin 數量仍為 1。
+> - Production Worker active Version 仍為 `96ea2857-9ab1-4d69-b518-63a325b07cec`；本次沒有執行 Production Worker 部署、D1 migration 或 D1 寫入。
+> - GitHub Actions `validate` job 在驗收 commit 通過，但 Cloudflare Workers Builds Check Run `140831508571` 為 failure，必須在 PR 合併前另行調查。不得將其記為通過。
+>
+> 完整命令結果、HTTP 回應、D1 action 數量、索引證據、Fixture 清理及 Production 隔離資料，均以 [MorningStar Staging Integration Acceptance Report v1.0](STAGING_INTEGRATION_ACCEPTANCE_REPORT_v1.0.md) 為正式驗收依據。
 
 ## 1. 修正目的
 
