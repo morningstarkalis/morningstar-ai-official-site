@@ -18,6 +18,22 @@
       "migrations_dir": "./migrations"
     }
   ],
+  "previews": {
+    "d1_databases": [
+      {
+        "binding": "DB",
+        "database_id": "4cb678c5-a9a3-4d81-acc4-634e06a6affc"
+      }
+    ],
+    "vars": {
+      "MODEL_SERIES_ENABLED": "false",
+      "MODEL_ORDER_REQUESTS_ENABLED": "false",
+      "PROCESSOR_DPA_REVIEWED": "false",
+      "CROSS_BORDER_REVIEWED": "false",
+      "PRIVACY_RETENTION_APPROVED": "false",
+      "CONSUMER_TERMS_REVIEWED": "false"
+    }
+  },
   "observability": {
     "enabled": true,
     "logs": {
