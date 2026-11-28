@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="same-origin">
+<title>MorningStar 管理控制台</title>
+<style>
+:root{color-scheme:dark;--bg:#080b10;--panel:#111923;--line:#2b3746;--text:#edf1f7;--muted:#a4afbd;--gold:#d8b66b;--red:#ff7777;--green:#83d6a3}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif}
+main{max-width:1040px;margin:0 auto;padding:32px 20px 80px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:26px}
+h1{font-size:25px;margin:0;color:var(--gold)}h2{font-size:18px;margin:0 0 15px}h3{font-size:15px;margin:0 0 10px}
+p,.muted{color:var(--muted);line-height:1.7}.panel{border:1px solid var(--line);background:var(--panel);padding:20px;border-radius:10px;margin:16px 0}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:flex;flex-direction:column;gap:7px;margin:10px 0}.field label{color:var(--muted);font-size:12px}
+input,select,textarea{background:#090f17;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:11px;font:inherit;width:100%}
+textarea{min-height:90px;resize:vertical}button{background:var(--gold);color:#111;border:0;border-radius:6px;padding:10px 14px;font-weight:700;cursor:pointer;margin:5px 5px 5px 0}
+button.secondary{background:transparent;color:var(--text);border:1px solid var(--line)}button:disabled{opacity:.45;cursor:not-allowed}
+.status{white-space:pre-wrap;border:1px solid var(--line);border-radius:6px;padding:12px;color:var(--muted);margin:12px 0}.error{color:var(--red)}.ok{color:var(--green)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#070b10;border:1px solid var(--line);padding:12px;border-radius:6px;max-height:420px;overflow:auto}
+.small{font-size:12px}.hidden{display:none}.pill{border:1px solid var(--gold);color:var(--gold);border-radius:20px;padding:5px 10px;font-size:11px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}header{align-items:flex-start;flex-direction:column}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>MorningStar 管理控制台</h1><p class="muted">僅供管理員使用｜所有敏感操作均要求 MFA 並寫入稽核紀錄</p></div><span class="pill">ADMIN · PRIVATE OPERATIONS</span></header>
+
+<section id="setup" class="panel hidden">
+<h2>首次管理員初始化</h2>
+<p>只有在 Cloudflare Worker 已設定一次性 <code>ADMIN_BOOTSTRAP_TOKEN</code> 且尚無管理員時才能初始化。完成後請設定 <code>ADMIN_TOTP_SECRET</code>，再使用管理員登入。</p>
+<form id="bootstrap">
+<div class="grid">
+<div class="field"><label>一次性 Bootstrap Token</label><input id="boot-token" type="password" required autocomplete="off"></div>
+<div class="field"><label>管理員電子郵件</label><input id="boot-email" type="email" required></div>
+<div class="field"><label>顯示名稱</label><input id="boot-name" maxlength="80" required></div>
+<div class="field"><label>密碼（至少 14 字元）</label><input id="boot-password" type="password" minlength="14" required></div>
+</div><button type="submit">初始化唯一管理員</button>
+</form><div id="boot-status" class="status" aria-live="polite"></div>
+</section>
+
+<section id="login" class="panel hidden">
+<h2>管理員登入</h2>
+<form id="login-form">
+<div class="grid">
+<div class="field"><label>電子郵件</label><input id="email" type="email" required autocomplete="username"></div>
+<div class="field"><label>密碼</label><input id="password" type="password" required autocomplete="current-password"></div>
+</div><button type="submit">登入管理員</button>
+</form><div id="login-status" class="status" aria-live="polite"></div>
+<p class="small">登入只建立管理員 Session；查看控制台及每一項敏感操作，還需要輸入新的 6 位數 TOTP。未設定 MFA 時，管理 API 會拒絕操作。</p>
+</section>
+
+<section id="dashboard" class="hidden">
+<div class="panel">
+<div class="grid">
+<div><h2>產品狀態</h2><p class="muted">Skill 公開發布與 Model Series 商業產品分開管理。</p></div>
+<div><button id="overview" class="secondary">重新載入總覽（需新 TOTP）</button><button id="logout" class="secondary">登出</button></div>
+</div>
+<div id="summary" class="status">尚未載入</div>
+<pre id="overview-data"></pre>
+</div>
+
+<div class="panel">
+<h2>RC7 權利來源審查</h2>
+<p class="muted">每個檔案都必須有來源與再散布權利證據。若無法清權，請排除該檔案並重新建置套件；不能只因檔案雜湊正確就核准。</p>
+<div class="field"><label>版本</label><input id="rights-version" value="3.1.2-rc.7"></div>
+<button id="load-assets" class="secondary">載入權利清單（需新 TOTP）</button>
+<div id="asset-list" class="status">尚未載入</div>
+<div class="grid">
+<div class="field"><label>資產 ID（從清單複製）</label><input id="asset-id"></div>
+<div class="field"><label>審查結果</label><select id="asset-status"><option value="approved">核准納入</option><option value="excluded">排除出套件</option><option value="rejected">拒絕</option></select></div>
+<div class="field"><label>權利依據</label><select id="rights-basis"><option value="original_author">原始作者</option><option value="assignment">權利讓與</option><option value="separate_license">獨立授權</option><option value="public_domain">公眾領域</option><option value="open_source">開放授權</option></select></div>
+<div class="field"><label>第三方素材？</label><select id="third-party"><option value="false">否</option><option value="true">是</option></select></div>
+<div class="field"><label>第三方授權名稱／版本／URL</label><input id="third-party-license"></div>
+<div class="field"><label>可否商業使用（僅記錄權利狀態）</label><select id="commercial-allowed"><option value="false">否／未取得</option><option value="true">是</option></select></div>
+<div class="field"><label>證據參照（檔案、來源網址、合約編號等）</label><input id="asset-evidence"></div>
+<div class="field"><label>審查說明</label><textarea id="asset-note"></textarea></div>
+</div>
+<label class="small"><input id="redistribution" type="checkbox"> 我已核對此檔案可依該授權公開再散布</label><br>
+<button id="review-asset">提交檔案審查（需新 TOTP）</button>
+</div>
+
+<div class="panel">
+<h2>建立 RC7 整體權利審查紀錄</h2>
+<p class="muted">必須先完成所有納入檔案的審查。外部法律審查參照必須是真實存在的文件或意見，不得填入虛構編號。</p>
+<div class="grid">
+<div class="field"><label>套件 SHA-256</label><input id="package-sha" value="6e9adf7af1ca161ff225d7367ce5e41f402aeb9ebdf0530970db19607d466771"></div>
+<div class="field"><label>套件檔案數</label><input id="manifest-count" type="number" min="1" value="18"></div>
+<div class="field"><label>外部法律審查證據參照</label><input id="legal-evidence" placeholder="例如：律師書面意見的真實文件路徑"></div>
+<div class="field"><label>審查說明</label><textarea id="legal-note"></textarea></div>
+</div>
+<button id="submit-rights-review">提交整體權利審查（需新 TOTP）</button>
+</div>
+
+<div class="panel">
+<h2>安全與安裝閘門</h2>
+<p class="muted">只在測試真正完成並保存證據後提交。這些欄位不會替代滲透測試、法律審查或實際安裝測試。</p>
+<div class="grid">
+<div class="field"><label>閘門類型</label><select id="gate-type"><option value="security">資安</option><option value="installation">安裝測試</option></select></div>
+<div class="field"><label>證據參照</label><input id="gate-evidence"></div>
+<div class="field"><label>審查說明</label><textarea id="gate-note"></textarea></div>
+</div>
+<button id="submit-gate">記錄通過（需新 TOTP）</button>
+</div>
+
+<div class="panel">
+<h2>正式發布</h2>
+<p class="muted">必須先把精確 ZIP 放入 Worker 靜態資產的 <code>/releases/skill/</code> 路徑，且 SHA-256 相符。此頁不提供 ZIP 上傳功能。RC7 目前不符合發布條件。</p>
+<div class="field"><label>靜態資產路徑</label><input id="asset-path" placeholder="/releases/skill/MorningStar-Skill-v3.1.2-rc.7-Public-NC-Installable.zip"></div>
+<button id="attach-asset" class="secondary">驗證並掛載套件（需新 TOTP）</button>
+<button id="publish" disabled>發布穩定版（全部閘門通過後才可執行）</button>
+</div>
+
+<div class="panel">
+<h2>MorningStar AI Model Series｜獨立商業產品線</h2>
+<p class="muted">本區管理獨立會員、法律文件、商業授權、模型產品與私有檔案。R2 與推論服務尚未配置時，相關操作會被後端拒絕；不要用假資料或空白證據啟用產品。</p>
+<button id="model-overview" class="secondary">載入 Model Series 總覽（需新 TOTP）</button>
+<pre id="model-overview-data"></pre>
+<h3>發布法律文件</h3>
+<div class="grid">
+<div class="field"><label>文件 ID</label><input id="model-doc-id"></div>
+<div class="field"><label>標題</label><input id="model-doc-title"></div>
+<div class="field"><label>版本</label><input id="model-doc-version"></div>
+<div class="field"><label>文件類型</label><select id="model-doc-scope"><option value="privacy_notice">隱私告知</option><option value="terms_of_service">服務條款</option><option value="commercial_model_license">商業模型授權</option><option value="api_terms">API 條款</option><option value="dpa">資料處理協議</option></select></div>
+<div class="field"><label>外部法律審查證據參照</label><input id="model-doc-evidence"></div>
+</div>
+<div class="field"><label>經法律審查的正式文件全文（至少 500 字）</label><textarea id="model-doc-body"></textarea></div>
+<button id="publish-model-doc">發布法律文件（需新 TOTP）</button>
+
+<h3>個資權利請求處理</h3>
+<p class="muted">此功能只建立案件處理紀錄；實際查詢、複製、更正、刪除、備份到期與第三方處理者刪除，仍須依已核准保存政策逐項完成。不得只按「完成」而未實際執行。</p>
+<button id="load-privacy-requests" class="secondary">載入待處理個資請求（需新 TOTP）</button>
+<pre id="privacy-requests-data"></pre>
+<div class="grid">
+<div class="field"><label>請求 ID</label><input id="privacy-request-id"></div>
+<div class="field"><label>處理狀態</label><select id="privacy-request-status"><option value="in_progress">處理中</option><option value="completed">完成</option><option value="partially_refused">部分拒絕</option><option value="refused">拒絕</option></select></div>
+<div class="field"><label>證據參照</label><input id="privacy-request-evidence"></div>
+<div class="field"><label>處理回覆與法定例外說明</label><textarea id="privacy-request-note"></textarea></div>
+</div>
+<label class="small"><input id="privacy-deletion-completed" type="checkbox"> 若為刪除請求，我已實際完成適用資料刪除並核對外部處理者與備份保留例外</label><br>
+<button id="resolve-privacy-request">記錄處理結果（需新 TOTP）</button>
+
+<h3>會員人工驗證</h3>
+<div class="grid">
+<div class="field"><label>會員 ID</label><input id="model-member-id"></div>
+<div class="field"><label>驗證證據參照</label><input id="model-member-evidence"></div>
+</div>
+<div class="field"><label>驗證說明</label><textarea id="model-member-note"></textarea></div>
+<button id="verify-model-member">啟用會員（需新 TOTP）</button>
+
+<h3>模型檔案上傳與審查</h3>
+<div class="grid">
+<div class="field"><label>Model Product ID</label><input id="model-product-id" value="morningstar-ai-model-series"></div>
+<div class="field"><label>模型版本</label><input id="model-artifact-version"></div>
+<div class="field"><label>ZIP 模型檔案（上限 25 MiB）</label><input id="model-artifact-file" type="file" accept=".zip,application/zip"></div>
+</div>
+<button id="upload-model-artifact">上傳至隔離區（需新 TOTP）</button>
+<div class="grid">
+<div class="field"><label>隔離檔案 ID</label><input id="model-artifact-id"></div>
+<div class="field"><label>獨立惡意程式掃描證據參照</label><input id="model-artifact-scan"></div>
+<div class="field"><label>權利清權證據參照</label><input id="model-artifact-rights"></div>
+</div>
+<div class="field"><label>審查說明</label><textarea id="model-artifact-note"></textarea></div>
+<button id="approve-model-artifact">核准私有檔案（需新 TOTP）</button>
+
+<h3>產品與商業授權</h3>
+<p class="muted">產品發布需要已發布的隱私告知、服務條款、商業模型授權、API 條款，以及可用的私有 R2 檔案與推論 Service Binding。</p>
+<button id="publish-model-product">發布 Model Product（需新 TOTP）</button>
+<div class="grid">
+<div class="field"><label>待審訂單 ID</label><input id="model-order-id"></div>
+<div class="field"><label>付款／結算參照</label><input id="model-payment-reference"></div>
+<div class="field"><label>已簽署商業合約參照</label><input id="model-contract-reference"></div>
+<div class="field"><label>授權 scopes（逗號分隔）</label><input id="model-license-scopes" value="inference,usage,download"></div>
+</div>
+<div class="field"><label>核准說明</label><textarea id="model-order-note"></textarea></div>
+<button id="approve-model-order">核准訂單並簽發授權（需新 TOTP）</button>
+</div>
+<div id="action-status" class="status" aria-live="polite"></div>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const version=()=>$('rights-version').value.trim();
+function status(id,msg,kind){const e=$(id);e.textContent=msg;e.className='status '+(kind||'');}
+async function api(path,body,totp,method){
+ const opts={method:method||(body?'POST':'GET'),credentials:'same-origin',headers:{}};
+ if(body!==undefined){opts.headers['Content-Type']='application/json';opts.body=JSON.stringify(body);}
+ if(totp)opts.headers['X-Admin-TOTP']=totp;
+ const r=await fetch(path,opts);let data={};try{data=await r.json()}catch(_){}
+ if(!r.ok)throw new Error(data.error||('HTTP '+r.status));
+ return data;
+}
+function freshTotp(){const code=prompt('請輸入新的 6 位數管理員 TOTP。每次敏感操作都必須使用尚未使用過的新代碼。');if(!code)return null;if(!/^\d{6}$/.test(code))throw new Error('TOTP 必須是 6 位數');return code;}
+function showDashboard(){ $('login').classList.add('hidden');$('setup').classList.add('hidden');$('dashboard').classList.remove('hidden'); }
+async function init(){
+ try{
+  const s=await api('/api/setup-status');
+  if(s.needs_admin){$('setup').classList.remove('hidden');if(!s.bootstrap_configured)status('boot-status','Cloudflare 尚未設定 ADMIN_BOOTSTRAP_TOKEN。請先在 Worker Secrets 設定後重新載入。','error');}
+  else $('login').classList.remove('hidden');
+ }catch(e){status('login-status','無法連線至管理服務：'+e.message,'error');$('login').classList.remove('hidden');}
+}
+$('bootstrap').addEventListener('submit',async e=>{
+ e.preventDefault();
+ try{
+  const r=await fetch('/api/admin/bootstrap',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Admin-Bootstrap':$('boot-token').value},body:JSON.stringify({email:$('boot-email').value,display_name:$('boot-name').value,password:$('boot-password').value})});
+  const d=await r.json();if(!r.ok)throw new Error(d.error||'Bootstrap failed');
+  status('boot-status','管理員帳戶已建立。請先在 Cloudflare Worker Secret 設定 ADMIN_TOTP_SECRET（Base32），並在驗證器 App 加入同一組密鑰，再使用管理員登入。','ok');
+  $('setup').classList.add('hidden');$('login').classList.remove('hidden');
+ }catch(e){status('boot-status',e.message,'error');}
+});
+$('login-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ try{await api('/api/auth/login',{email:$('email').value,password:$('password').value});showDashboard();status('summary','登入成功。請載入總覽並依提示輸入新的 TOTP。','ok');}
+ catch(e){status('login-status',e.message,'error');}
+});
+$('overview').addEventListener('click',async()=>{
+ try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/overview',undefined,otp,'GET');$('overview-data').textContent=JSON.stringify(d,null,2);status('summary','總覽載入成功。每次後續操作請使用新的 TOTP。','ok');}
+ catch(e){status('summary',e.message,'error');}
+});
+$('logout').addEventListener('click',async()=>{try{await api('/api/auth/logout',{});location.reload();}catch(e){status('action-status',e.message,'error');}});
+$('load-assets').addEventListener('click',async()=>{
+ try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/skill/releases/'+encodeURIComponent(version())+'/rights-assets',undefined,otp,'GET');$('asset-list').textContent=d.assets.map(a=>[a.id,a.asset_path,a.status,'included='+a.included_in_package,'basis='+a.rights_basis,'sha256='+a.asset_sha256].join(' | ')).join('\n');status('action-status','已載入 '+d.assets.length+' 筆資產。','ok');}
+ catch(e){status('action-status',e.message,'error');}
+});
+$('review-asset').addEventListener('click',async()=>{
+ try{
+  const otp=freshTotp();if(!otp)return;
+  const body={status:$('asset-status').value,rights_basis:$('rights-basis').value,third_party:$('third-party').value==='true',third_party_license:$('third-party-license').value,commercial_use_allowed:$('commercial-allowed').value==='true',redistribution_allowed:$('redistribution').checked,evidence_reference:$('asset-evidence').value,review_note:$('asset-note').value};
+  const d=await api('/api/admin/skill/rights-assets/'+encodeURIComponent($('asset-id').value.trim())+'/review',body,otp);
+  status('action-status','資產審查已記錄：'+d.id+' / '+d.status,'ok');
+ }catch(e){status('action-status',e.message,'error');}
+});
+$('submit-rights-review').addEventListener('click',async()=>{
+ try{
+  const otp=freshTotp();if(!otp)return;
+  const d=await api('/api/admin/skill/rights-review',{version:version(),package_sha256:$('package-sha').value.trim(),manifest_file_count:Number($('manifest-count').value),external_review_reference:$('legal-evidence').value,review_note:$('legal-note').value},otp);
+  status('action-status','整體權利審查紀錄已建立：'+JSON.stringify(d),'ok');
+ }catch(e){status('action-status',e.message,'error');}
+});
+$('submit-gate').addEventListener('click',async()=>{
+ try{
+  const otp=freshTotp();if(!otp)return;
+  const d=await api('/api/admin/skill/releases/'+encodeURIComponent(version())+'/gates',{gate_type:$('gate-type').value,status:'passed',evidence_reference:$('gate-evidence').value,review_note:$('gate-note').value},otp);
+  status('action-status','發布閘門已記錄：'+JSON.stringify(d),'ok');
+ }catch(e){status('action-status',e.message,'error');}
+});
+$('attach-asset').addEventListener('click',async()=>{
+ try{
+  const otp=freshTotp();if(!otp)return;
+  const d=await api('/api/admin/skill/releases/'+encodeURIComponent(version())+'/asset',{file_path:$('asset-path').value.trim()},otp);
+  status('action-status','套件已驗證並掛載：'+JSON.stringify(d),'ok');
+ }catch(e){status('action-status',e.message,'error');}
+});
+$('publish').addEventListener('click',async()=>{
+ try{
+  const otp=freshTotp();if(!otp)return;
+  const d=await api('/api/admin/skill/releases/'+encodeURIComponent(version())+'/publish',{},otp);
+  status('action-status','發布完成：'+JSON.stringify(d),'ok');
+ }catch(e){status('action-status',e.message,'error');}
+});
+
+$('load-privacy-requests').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/privacy-requests',undefined,otp,'GET');$('privacy-requests-data').textContent=JSON.stringify(d,null,2);status('action-status','個資權利請求清單已載入。','ok');}catch(e){status('action-status',e.message,'error');}});
+$('resolve-privacy-request').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/privacy-requests/'+encodeURIComponent($('privacy-request-id').value.trim())+'/resolve',{status:$('privacy-request-status').value,response_note:$('privacy-request-note').value,evidence_reference:$('privacy-request-evidence').value,deletion_completed:$('privacy-deletion-completed').checked},otp);status('action-status','個資請求處理紀錄：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+$('model-overview').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/overview',undefined,otp,'GET');$('model-overview-data').textContent=JSON.stringify(d,null,2);status('action-status','Model Series 總覽已載入。','ok');}catch(e){status('action-status',e.message,'error');}});
+$('publish-model-doc').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/legal-documents',{id:$('model-doc-id').value,title:$('model-doc-title').value,version:$('model-doc-version').value,scope:$('model-doc-scope').value,body:$('model-doc-body').value,review_evidence_reference:$('model-doc-evidence').value},otp);status('action-status','法律文件發布結果：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+$('verify-model-member').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/members/'+encodeURIComponent($('model-member-id').value.trim())+'/verify',{evidence_reference:$('model-member-evidence').value,review_note:$('model-member-note').value},otp);status('action-status','會員驗證結果：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+$('upload-model-artifact').addEventListener('click',async()=>{try{const file=$('model-artifact-file').files[0];if(!file)throw new Error('請選擇 ZIP 檔');const otp=freshTotp();if(!otp)return;const data=new FormData();data.append('model_product_id',$('model-product-id').value);data.append('version',$('model-artifact-version').value);data.append('file',file);const r=await fetch('/api/admin/model/artifacts/upload',{method:'POST',credentials:'same-origin',headers:{'X-Admin-TOTP':otp},body:data});const d=await r.json();if(!r.ok)throw new Error(d.error||('HTTP '+r.status));$('model-artifact-id').value=d.id;status('action-status','模型檔案已進入隔離區：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+$('approve-model-artifact').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const d=await api('/api/admin/model/artifacts/'+encodeURIComponent($('model-artifact-id').value.trim())+'/approve',{security_scan_reference:$('model-artifact-scan').value,rights_review_reference:$('model-artifact-rights').value,review_note:$('model-artifact-note').value},otp);status('action-status','私有檔案審查結果：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+$('publish-model-product').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const id=$('model-product-id').value.trim();const d=await api('/api/admin/model/products/'+encodeURIComponent(id)+'/publish',{},otp);status('action-status','Model Product 發布結果：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+$('approve-model-order').addEventListener('click',async()=>{try{const otp=freshTotp();if(!otp)return;const scopes=$('model-license-scopes').value.split(',').map(x=>x.trim()).filter(Boolean);const d=await api('/api/admin/model/orders/'+encodeURIComponent($('model-order-id').value.trim())+'/approve',{payment_reference:$('model-payment-reference').value,contract_reference:$('model-contract-reference').value,scopes,review_note:$('model-order-note').value},otp);status('action-status','Model Series 授權已簽發。金鑰只會顯示一次：'+JSON.stringify(d),'ok');}catch(e){status('action-status',e.message,'error');}});
+init();
+</script>
+</body>
+</html>
