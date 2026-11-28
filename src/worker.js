@@ -57,9 +57,35 @@ function validPassword(value) { return typeof value === "string" && value.length
 function nowIso() { return new Date().toISOString(); }
 function addDays(days) { return new Date(Date.now() + days * 86400000).toISOString(); }
 function rows(result) { return result && Array.isArray(result.results) ? result.results : []; }
+function auditStatement(env, actor, action, targetType, targetId, detail, createdAt = nowIso()) {
+  return env.DB.prepare("INSERT INTO audit_log (id,actor_user_id,action,target_type,target_id,detail_json,created_at) VALUES (?,?,?,?,?,?,?)")
+    .bind(crypto.randomUUID(), actor || null, action, targetType || null, targetId || null, detail ? JSON.stringify(detail) : null, createdAt);
+}
 async function audit(env, actor, action, targetType, targetId, detail) {
-  await env.DB.prepare("INSERT INTO audit_log (id,actor_user_id,action,target_type,target_id,detail_json,created_at) VALUES (?,?,?,?,?,?,?)")
-    .bind(crypto.randomUUID(), actor || null, action, targetType || null, targetId || null, detail ? JSON.stringify(detail) : null, nowIso()).run();
+  await auditStatement(env, actor, action, targetType, targetId, detail).run();
+}
+// Persist at most one duplicate security event for the same actor/action/target
+// during the requested window. A single INSERT..SELECT keeps deduplication atomic.
+async function auditOnceWithin(env, actor, action, targetType, targetId, detail, windowSeconds) {
+  const actorId = actor || null;
+  const type = targetType || null;
+  const target = targetId || null;
+  const now = nowIso();
+  const cutoff = new Date(Date.now() - windowSeconds * 1000).toISOString();
+  return await env.DB.prepare(
+    "INSERT INTO audit_log (id,actor_user_id,action,target_type,target_id,detail_json,created_at) " +
+    "SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS (" +
+    "SELECT 1 FROM audit_log WHERE actor_user_id IS ? AND action=? AND target_type IS ? AND target_id IS ? AND created_at>?)"
+  ).bind(
+    crypto.randomUUID(), actorId, action, type, target,
+    detail ? JSON.stringify(detail) : null, now,
+    actorId, action, type, target, cutoff
+  ).run();
+}
+function adminAuditRoute(request) {
+  return new URL(request.url).pathname
+    .replace(/\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/gi, "/:id")
+    .slice(0, 180);
 }
 async function createSession(env, userId) {
   const token = randomToken(32), tokenHash = await digest(token), expiry = addDays(SESSION_DAYS), now = nowIso();
@@ -81,7 +107,13 @@ async function requireUser(request, env) {
 }
 async function requireAdmin(request, env) {
   const user = await requireUser(request, env);
-  if (user.role !== "admin") throw Object.assign(new Error("管理員權限不足 / Administrator access required"), { status: 403 });
+  if (user.role !== "admin") {
+    await auditOnceWithin(
+      env, user.id, "admin.access.denied", "admin_route", adminAuditRoute(request),
+      { method: request.method.toUpperCase() }, 60
+    );
+    throw Object.assign(new Error("管理員權限不足 / Administrator access required"), { status: 403 });
+  }
   return user;
 }
 
@@ -104,11 +136,22 @@ async function matchingAdminTotpStep(secret,supplied){
 async function requireAdminMfa(request,env){
   const admin=await requireAdmin(request,env);
   if(!env.ADMIN_TOTP_SECRET)throw Object.assign(new Error("Admin MFA is not configured; privileged writes are disabled"),{status:503});
-  const step=await matchingAdminTotpStep(env.ADMIN_TOTP_SECRET,request.headers.get("X-Admin-TOTP")||"");
-  if(step===null)throw Object.assign(new Error("Valid administrator TOTP required"),{status:401});
+  const route=adminAuditRoute(request);
+  const supplied=request.headers.get("X-Admin-TOTP")||"";
+  const step=await matchingAdminTotpStep(env.ADMIN_TOTP_SECRET,supplied);
+  if(step===null){
+    await auditOnceWithin(env,admin.id,"admin.totp.invalid","admin_route",route,
+      {method:request.method.toUpperCase(),reason:supplied?"invalid_code":"missing_code"},60);
+    throw Object.assign(new Error("Valid administrator TOTP required"),{status:401});
+  }
   const used=await env.DB.prepare("INSERT INTO admin_mfa_state (admin_user_id,last_step,updated_at) VALUES (?,?,?) ON CONFLICT(admin_user_id) DO UPDATE SET last_step=excluded.last_step,updated_at=excluded.updated_at WHERE admin_mfa_state.last_step < excluded.last_step RETURNING admin_user_id")
     .bind(admin.id,step,nowIso()).first();
-  if(!used)throw Object.assign(new Error("Administrator TOTP code was already used; wait for the next code"),{status:409});
+  if(!used){
+    await auditOnceWithin(env,admin.id,"admin.totp.replay_rejected","admin_totp_step",String(step),
+      {route},180);
+    throw Object.assign(new Error("Administrator TOTP code was already used; wait for the next code"),{status:409});
+  }
+  await audit(env,admin.id,"admin.mfa.accepted","admin_route",route,{totp_step:step});
   return admin;
 }
 async function issueModelApiKey(env,memberId,licenseId,scopes,expiresAt){const raw="MSM_"+randomToken(32),id=crypto.randomUUID(),now=nowIso();await env.DB.prepare("INSERT INTO model_api_keys (id,model_member_id,model_license_id,key_prefix,key_hash,scopes_json,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?)").bind(id,memberId,licenseId,raw.slice(0,12),await digest(raw),JSON.stringify(scopes),now,expiresAt||null).run();return{id,api_key:raw,key_prefix:raw.slice(0,12),scopes,created_at:now,expires_at:expiresAt||null};}
@@ -508,14 +551,26 @@ async function handle(request, env) {
     if (!validEmail(email) || !password) return fail(400, "電子郵件或密碼格式錯誤 / Invalid email or password");
     const emailKey = await digest(email), since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
     const attempts = await env.DB.prepare("SELECT COUNT(*) AS count FROM auth_attempts WHERE email_key=? AND attempted_at>?").bind(emailKey, since).first();
-    if (Number(attempts.count) >= 8) return fail(429, "登入嘗試過多，請 15 分鐘後再試 / Too many attempts; retry in 15 minutes");
+    if (Number(attempts.count) >= 8) {
+      await auditOnceWithin(env, null, "admin.login.rate_limited", "auth_identity", emailKey,
+        { threshold: 8, window_minutes: 15 }, 15 * 60);
+      return fail(429, "登入嘗試過多，請 15 分鐘後再試 / Too many attempts; retry in 15 minutes");
+    }
     await env.DB.prepare("INSERT INTO auth_attempts (email_key,attempted_at) VALUES (?,?)").bind(emailKey, nowIso()).run();
     const u = await env.DB.prepare("SELECT id,email,display_name,password_salt,password_hash,password_iterations,role,email_verified,status FROM users WHERE email=?").bind(email).first();
     const verification = u
       ? await verifyPassword(password, u.password_salt, u.password_hash, u.password_iterations)
       : (await hashPassword(password, "00000000000000000000000000000000"), { valid: false, needsRehash: false });
-    if (!u || !verification.valid || u.status !== "active") return fail(401, "電子郵件或密碼不正確 / Incorrect email or password");
-    if (u.role !== "admin") return fail(403, "This login is reserved for site administrators. Model Series uses a separate account system.");
+    if (!u || !verification.valid || u.status !== "active") {
+      await audit(env, null, "admin.login.failed", "auth_identity", emailKey,
+        { attempt_number: Number(attempts.count) + 1, reason: "invalid_credentials_or_inactive_account" });
+      return fail(401, "電子郵件或密碼不正確 / Incorrect email or password");
+    }
+    if (u.role !== "admin") {
+      await env.DB.prepare("DELETE FROM auth_attempts WHERE email_key=?").bind(emailKey).run();
+      await audit(env, u.id, "admin.login.denied_role", "user", u.id, { role: u.role });
+      return fail(403, "This login is reserved for site administrators. Model Series uses a separate account system.");
+    }
     if (verification.needsRehash) {
       const salt = randomHex(16), hash = await hashPassword(password, salt);
       await env.DB.prepare("UPDATE users SET password_salt=?,password_hash=?,password_iterations=0 WHERE id=? AND password_hash=?")
@@ -523,13 +578,35 @@ async function handle(request, env) {
     }
     await env.DB.prepare("DELETE FROM auth_attempts WHERE email_key=?").bind(emailKey).run();
     const s = await createSession(env, u.id);
-    await audit(env, u.id, "member.login", "user", u.id);
+    try {
+      await audit(env, u.id, "admin.login.succeeded", "user", u.id, { session_days: SESSION_DAYS });
+    } catch (error) {
+      // Do not leave an unissued session active when the durable login audit fails.
+      try {
+        await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(s.token)).run();
+      } catch (_) {}
+      throw error;
+    }
     return json({ user: auditSafeUser(u) }, 200, { "Set-Cookie": sessionCookie(s.token, SESSION_DAYS * 86400) });
   }
 
   if (path === "/api/auth/logout" && method === "POST") {
     const token = cookie(request, SESSION_COOKIE);
-    if (token) await env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(await digest(token)).run();
+    if (token) {
+      const tokenHash = await digest(token);
+      const user = await getUser(request, env);
+      const revoke = env.DB.prepare("DELETE FROM sessions WHERE token_hash=?").bind(tokenHash);
+      if (user) {
+        const action = user.role === "admin" ? "admin.logout" : "auth.session.logout";
+        // D1 batch keeps the audit event and current-session revocation together.
+        await env.DB.batch([
+          auditStatement(env, user.id, action, user.role === "admin" ? "admin_session" : "user_session", null, { session_revoked: true }),
+          revoke
+        ]);
+      } else {
+        await revoke.run();
+      }
+    }
     return json({ ok: true }, 200, { "Set-Cookie": sessionCookie("", 0) });
   }
 
