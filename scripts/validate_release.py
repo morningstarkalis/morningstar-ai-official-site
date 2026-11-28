@@ -15,6 +15,7 @@ MIGRATIONS = [
     "0006_model_api_quotas_and_legal_review.sql",
     "0007_model_artifact_review_evidence.sql",
     "0008_atomic_model_api_quota_counters.sql",
+    "0009_security_audit_indexes.sql",
 ]
 
 db = sqlite3.connect(":memory:")
@@ -30,6 +31,10 @@ for name in MIGRATIONS:
     print(f"PASS: {name}")
 
 tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+audit_index = db.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_audit_log_security_dedupe'").fetchone()
+if not audit_index:
+    raise SystemExit("FAIL: security audit lookup index is missing")
+print("PASS: security audit lookup index")
 required = {
     "schema_migrations", "users", "sessions", "products", "orders", "licenses",
     "skill_releases", "model_members", "model_sessions", "model_products",
