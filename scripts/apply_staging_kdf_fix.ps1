@@ -31,7 +31,8 @@ Copy-Item -LiteralPath $ConfigPath -Destination $ConfigBackupPath -Force
 
 try {
     Write-Host 'Fetching the reviewed MorningStar Staging fix...' -ForegroundColor Cyan
-    git fetch origin "refs/heads/$ExpectedBranch:refs/remotes/origin/$ExpectedBranch"
+    $RefSpec = "refs/heads/{0}:refs/remotes/origin/{0}" -f $ExpectedBranch
+    git fetch origin $RefSpec
     if ($LASTEXITCODE -ne 0) { throw 'Git fetch failed.' }
 
     git merge --ff-only "origin/$ExpectedBranch"
