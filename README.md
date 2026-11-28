@@ -73,6 +73,7 @@ Do not commit API keys, bootstrap tokens, private model assets, private datasets
 - [Staging admin authentication audit remediation](STAGING_ADMIN_AUTH_AUDIT_REMEDIATION_v1.0.md)
 - [Commercial core boundary](COMMERCIAL_CORE_BOUNDARY.md)
 - [Model Series production activation checklist](MODEL_SERIES_PRODUCTION_CHECKLIST.md)
+- [Staging integration acceptance report](STAGING_INTEGRATION_ACCEPTANCE_REPORT_v1.0.md)
 - [Staging deployment runbook](STAGING_DEPLOYMENT_RUNBOOK.md)
 - [Production D1 migration runbook](PRODUCTION_MIGRATION_RUNBOOK.md)
 - [Repository source notice](REPOSITORY_SOURCE_NOTICE.md)
