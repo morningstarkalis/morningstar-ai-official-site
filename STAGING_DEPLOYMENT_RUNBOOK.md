@@ -30,41 +30,18 @@ npx wrangler deploy --config .\wrangler.staging.jsonc
 
 This deploys the Worker and static assets under the separate staging Worker name. It does not change the production Worker.
 
-## 2. Configure staging administrator secrets
+## 2. Staging administrator secrets — already configured
 
-Generate separate staging-only secrets. Do not reuse production secrets.
+The Staging administrator already exists. `ADMIN_BOOTSTRAP_TOKEN` has been removed and `ADMIN_TOTP_SECRET` remains configured on the Staging Worker.
 
-Bootstrap token:
+Do not generate or upload another Bootstrap Token, and do not rotate the existing TOTP secret as part of this audit remediation. Production secrets must never be copied into Staging.
 
-```powershell
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+## Password hashing compatibility — previously validated
 
-TOTP secret (Base32, 160-bit):
-
-```powershell
-node -e "const b=require('crypto').randomBytes(20),a='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';let bits='';for(const x of b)bits+=x.toString(2).padStart(8,'0');let o='';for(let i=0;i<bits.length;i+=5)o+=a[parseInt(bits.slice(i,i+5).padEnd(5,'0'),2)];console.log(o)"
-```
-
-Set secrets for the staging Worker only:
-
-```powershell
-npx wrangler secret put ADMIN_BOOTSTRAP_TOKEN --config .\wrangler.staging.jsonc
-npx wrangler secret put ADMIN_TOTP_SECRET --config .\wrangler.staging.jsonc
-```
-
-When prompted, paste the generated values. Add the same TOTP Base32 secret to a trusted authenticator application. Never paste either secret into GitHub, this conversation, or source files.
-
-## Password hashing compatibility (before Bootstrap)
-
-- New credentials use versioned scrypt hashes with the OWASP profile N=2^14, r=8, p=5.
-- The scheme is implemented through `node:crypto`; this Worker uses compatibility date 2026-11-20, which enables Node.js compatibility by default.
-- Existing unprefixed PBKDF2-SHA-256 hashes with a supported iteration count are verified on successful login, then transparently re-hashed with scrypt. No D1 schema change or migration is required.
-- New scrypt rows set the legacy `password_iterations` column to `0`; the algorithm and parameters are carried by the `password_hash` version prefix.
-- Run `node scripts/test_password_kdf.mjs` before deployment.
-- After deploying to Staging, run `scripts/test_staging_kdf.ps1` from PowerShell. It calls the secret-protected `/api/admin/bootstrap/preflight` route, which hashes and verifies a throwaway password on the real Worker and explicitly performs no D1 write.
-- The PowerShell preflight must return PASS before any administrator Bootstrap attempt. A failure means stop; do not retry Bootstrap.
-- For a guarded one-command update, local validation, Staging-only deployment and real-runtime preflight, run `powershell -ExecutionPolicy Bypass -File scripts/apply_staging_kdf_fix.ps1` from any directory. It preserves the local Staging config, refuses unrelated working-tree changes, and never sends the actual Bootstrap request.
+- New credentials use versioned scrypt hashes with profile N=2^14, r=8, p=5. The implementation is in `src/password.mjs`.
+- The real Staging Worker passed the hash and verify preflight before the one-time administrator Bootstrap; the preflight performed no D1 writes.
+- The administrator now exists and `ADMIN_BOOTSTRAP_TOKEN` has been removed. Do not rerun the bootstrap preflight: its guard is intentionally unavailable after initialization.
+- CI continues to run `node scripts/test_password_kdf.mjs` for hash creation, verification, legacy PBKDF2 compatibility and fail-closed cases.
 
 ## 3. Existing staging administrator state
 
