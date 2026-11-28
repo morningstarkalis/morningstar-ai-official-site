@@ -49,7 +49,7 @@ The Staging administrator has already been initialized and the one-time `ADMIN_B
 
 Do not run Bootstrap again, do not recreate `ADMIN_BOOTSTRAP_TOKEN`, and do not rotate `ADMIN_TOTP_SECRET` as part of routine testing. Use the existing administrator credentials and a fresh TOTP for every privileged operation.
 
-The staging D1 currently contains zero users, zero admins and zero sessions, so first-admin bootstrap is expected.
+The staging D1 already contains the initialized administrator and MFA state. Do not rely on older baseline notes that describe an empty staging database; verify live counts read-only before any fixture setup.
 
 ## 4. Verify
 
