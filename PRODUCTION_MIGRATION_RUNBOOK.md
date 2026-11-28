@@ -11,7 +11,7 @@
 - New tables such as `schema_migrations`, `skill_releases`, `model_members`, `model_api_quotas` and `release_gate_records` are absent.
 - Production does not currently have `model_legal_documents` or `model_artifacts`, so migrations 0006 and 0007 have no existing target tables to conflict with.
 - The production Worker secret-name list was empty on 2026-11-28. ADMIN_TOTP_SECRET must be configured before deploying the new MFA-protected admin API.
-- The eight migrations were applied to staging only.
+- Migrations 0001–0008 were previously applied to staging only. Migration 0009 (security audit lookup index) is a new branch change and remains unapplied to both Staging and Production.
 
 ## 1. Make and verify a durable backup
 
@@ -59,7 +59,7 @@ Only after the backup file exists and its hash is recorded:
 npx wrangler d1 migrations apply morningstar-membership --remote
 ```
 
-Read every migration name in the confirmation prompt. Abort if the target is not the production database or if the migration list differs from 0001–0008.
+Read every migration name in the confirmation prompt. The reviewed source branch now contains 0001–0009, but migration 0009 must first be applied and verified on Staging. **Do not execute this Production migration step until Staging validation, durable backup verification, and explicit Production approval are complete.** Abort if the target is not the production database or if the migration list differs from the approved manifest.
 
 Wrangler's D1 migration command records its own migration history and captures a backup after applying migrations. The project also records its version rows in `schema_migrations`.
 
