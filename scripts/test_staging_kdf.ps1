@@ -4,7 +4,15 @@ $BaseUrl = 'https://morningstar-ai-official-site-staging.morningstarkalis.worker
 $Origin = $BaseUrl
 
 # Read the staging-only bootstrap token without echoing it.
-$SecureToken = Read-Host 'Enter the current STAGING ADMIN_BOOTSTRAP_TOKEN' -AsSecureString
+# Reuse a token already held by the invoking PowerShell session when available.
+# This avoids asking the operator to reveal or manually copy a secret.
+$InheritedToken = Get-Variable -Name 'BootstrapToken' -ValueOnly -ErrorAction SilentlyContinue
+if ($InheritedToken -is [string] -and -not [string]::IsNullOrWhiteSpace($InheritedToken)) {
+    $SecureToken = ConvertTo-SecureString -String $InheritedToken -AsPlainText -Force
+} else {
+    $SecureToken = Read-Host 'Enter the current STAGING ADMIN_BOOTSTRAP_TOKEN' -AsSecureString
+}
+$InheritedToken = $null
 $TokenPtr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureToken)
 
 try {
