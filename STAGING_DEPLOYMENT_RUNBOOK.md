@@ -1,69 +1,180 @@
 # Staging Worker Deployment Runbook
 
-**Purpose:** Deploy and test the current feature branch against the isolated staging D1 database.  
-**Worker name:** morningstar-ai-official-site-staging  
-**D1:** morningstar-membership-staging-v311  
-**Production isolation:** The staging config binds only to the staging D1 ID.
+**Purpose:** Deploy and verify the feature branch only against the isolated Staging Worker and Staging D1.  
+**Last verified:** 2026-11-28 (UTC)  
+**Worker:** `morningstar-ai-official-site-staging`  
+**D1:** `morningstar-membership-staging-v311`  
+**Current acceptance record:** [MorningStar Staging Integration Acceptance Report v1.0](STAGING_INTEGRATION_ACCEPTANCE_REPORT_v1.0.md)  
+**Production boundary:** No Production deployment or D1 migration is authorized by this runbook.
 
-## Important staging migration note
+## 1. Current verified Staging state
 
-The original migrations 0001–0008 were applied to this staging D1 through the Cloudflare D1 API and verified. The database has the project-level `schema_migrations` table, but it was not initialized through Wrangler's own `d1_migrations` tracking table.
+As of 2026-11-28:
 
-The security-audit remediation branch adds migration `0009_security_audit_indexes.sql`. **That migration is pending and has not been applied to Staging or Production.** It adds only an index to the existing `audit_log` table. Apply and verify it against the Staging D1 through the approved Cloudflare D1 API procedure before deploying the revised Worker.
+| Item | Verified state |
+|---|---|
+| Worker URL | https://morningstar-ai-official-site-staging.morningstarkalis.workers.dev |
+| Active Worker Version ID | `2e6a3c62-261e-433b-8cb0-5a4e48fe11ec` |
+| Deployment ID | `e10bcba6-5f0e-4b25-ba3a-c8f9aa36a8a5` |
+| Traffic | 100% to the version above |
+| Staging D1 name | `morningstar-membership-staging-v311` |
+| Staging D1 ID | `74cd1491-8d8b-4e56-8ab8-69839ccc60e8` |
+| Model Series flags | `MODEL_SERIES_ENABLED=false`; `MODEL_ORDER_REQUESTS_ENABLED=false` |
+| Setup status | `needs_admin=false`; `bootstrap_configured=false` |
 
-**Do not run `wrangler d1 migrations apply` against this existing staging D1.** Wrangler may consider all files unapplied and re-run non-idempotent ALTER TABLE migrations 0006 and 0007. Do not apply any migration to Production as part of this Staging work. A future fresh staging database should be initialized through Wrangler migrations from the start.
+The Staging Worker deployment was created at 2026-11-28 02:24:57.602281 UTC using the Staging configuration. Cloudflare deployment metadata confirms that 100% of Staging Worker traffic points to the version shown above.
 
-## Local prerequisites
+The administrator was already initialized before this deployment. Do not run Bootstrap again, do not create another administrator, and do not rotate the existing Staging TOTP secret as part of routine verification.
 
-- Node.js LTS and npm.
-- Cloudflare account access for the Worker and staging D1.
-- A local clone of this public repository and the feature branch.
-- Never place production secrets in staging.
+## 2. Staging migration state and mandatory safeguards
 
-## 1. Deploy the isolated staging Worker
+Migrations 0001–0008 had previously been applied to this Staging D1. The security-audit index migration, `0009_security_audit_indexes.sql`, was subsequently applied to **Staging only** through the Cloudflare D1 API using:
 
-From the repository root:
-
-```powershell
-npx wrangler deploy --config .\wrangler.staging.jsonc
+```sql
+CREATE INDEX IF NOT EXISTS idx_audit_log_security_dedupe
+ON audit_log (actor_user_id, action, target_type, target_id, created_at);
 ```
 
-This deploys the Worker and static assets under the separate staging Worker name. It does not change the production Worker.
+Read-only verification confirmed that `sqlite_master` contains `idx_audit_log_security_dedupe` and `PRAGMA index_info` returns these columns in order:
 
-## 2. Staging administrator secrets — already configured
+1. `actor_user_id`
+2. `action`
+3. `target_type`
+4. `target_id`
+5. `created_at`
 
-The Staging administrator already exists. `ADMIN_BOOTSTRAP_TOKEN` has been removed and `ADMIN_TOTP_SECRET` remains configured on the Staging Worker.
+**Migration 0009 is already applied to Staging. Do not apply it again as a new operation. Production has not received migration 0009.**
 
-Do not generate or upload another Bootstrap Token, and do not rotate the existing TOTP secret as part of this audit remediation. Production secrets must never be copied into Staging.
+### Critical Wrangler migration warning
 
-## Password hashing compatibility — previously validated
+The existing Staging D1 has the project-level `schema_migrations` table, but Wrangler's own `d1_migrations` tracking table was not initialized through Wrangler. Therefore:
 
-- New credentials use versioned scrypt hashes with profile N=2^14, r=8, p=5. The implementation is in `src/password.mjs`.
-- The real Staging Worker passed the hash and verify preflight before the one-time administrator Bootstrap; the preflight performed no D1 writes.
-- The administrator now exists and `ADMIN_BOOTSTRAP_TOKEN` has been removed. Do not rerun the bootstrap preflight: its guard is intentionally unavailable after initialization.
-- CI continues to run `node scripts/test_password_kdf.mjs` for hash creation, verification, legacy PBKDF2 compatibility and fail-closed cases.
+- **Never run `wrangler d1 migrations apply` against this existing Staging D1.**
+- Do not attempt to initialize Wrangler's migration history by replaying all migration files.
+- In particular, migrations 0006 and 0007 contain additive ALTER operations that must not be blindly replayed.
+- Do not run a Production migration as part of Staging verification.
+- For any future Staging schema change, inspect the exact SQL and live schema first; use the approved, reviewed Cloudflare D1 API operation for this existing database, then verify with read-only SQL.
+- A newly created database may use Wrangler migrations from the beginning, after a separate initialization plan is approved.
 
-## 3. Existing staging administrator state
+## 3. Local prerequisites and environment isolation
 
-The Staging administrator has already been initialized and the one-time `ADMIN_BOOTSTRAP_TOKEN` has been removed from the Staging Worker. The live `/api/setup-status` response was verified as `needs_admin=false` and `bootstrap_configured=false`; the Staging TOTP secret remains configured.
+- Node.js and npm installed.
+- Cloudflare account access limited to the required Worker and Staging D1 operations.
+- Repository checked out at the intended feature branch and reviewed commit.
+- Use `wrangler.staging.jsonc` for Staging deployment.
+- Confirm the Worker name and D1 ID in the Staging config before every deploy.
+- Never copy Production secrets into Staging or print secret values.
+- Do not commit local-only configuration changes or credentials.
 
-Do not run Bootstrap again, do not recreate `ADMIN_BOOTSTRAP_TOKEN`, and do not rotate `ADMIN_TOTP_SECRET` as part of routine testing. Use the existing administrator credentials and a fresh TOTP for every privileged operation.
+The Staging Worker must bind to the Staging D1 ID shown above. Never substitute the Production Worker name, Production D1 name, or Production D1 ID.
 
-The staging D1 already contains the initialized administrator and MFA state. Do not rely on older baseline notes that describe an empty staging database; verify live counts read-only before any fixture setup.
+## 4. Staging deployment
 
-## 4. Verify
+The current verified deployment is already active. For a future, separately reviewed Staging code update, run from the repository root:
 
-- Open `/`, `/model.html` and `/admin.html`.
-- Public Skill content must load without member sign-in.
-- Model Series catalog may be empty; registration, order requests and inference must remain disabled.
-- Admin overview must require a fresh TOTP.
-- Reusing the same TOTP time-step must fail with HTTP 409 and create a bounded `admin.totp.replay_rejected` audit event.
-- Failed admin login, throttled login, non-admin role denial, invalid/replayed TOTP, accepted MFA and admin logout must use the new security audit actions.
-- A non-admin Session must receive HTTP 403 from an admin route; a dedicated non-admin test identity is required before claiming this dynamic test passed.
-- No Model Series member can be registered while required flags and legal/processor/retention controls remain false.
-- No private download is possible without R2, an active license and the download scope.
-- No inference call is possible without the private service binding and secret.
+```powershell
+npx.cmd wrangler deploy --config .\wrangler.staging.jsonc
+```
 
-## 5. What this staging deployment cannot prove
+After deployment, capture the new Worker Version ID and Deployment ID from the command output and verify through Cloudflare deployments metadata that:
 
-R2 and the inference service are not configured. Therefore private artifact upload/download and real AI inference cannot pass end-to-end tests yet. Do not change the staging feature flags to true to bypass missing dependencies.
+- the script is `morningstar-ai-official-site-staging`;
+- the D1 binding points to the Staging D1 ID;
+- the expected version receives 100% of Staging traffic;
+- the feature flags remain false unless a separately approved activation plan proves all dependencies are ready.
+
+Do not infer successful deployment from a local command alone; verify the Cloudflare deployment record and live HTTP behavior.
+
+## 5. Staging administrator and secret handling
+
+- The Staging administrator already exists.
+- `ADMIN_BOOTSTRAP_TOKEN` has been removed; `/api/setup-status` returned `bootstrap_configured=false`.
+- `ADMIN_TOTP_SECRET` is configured as a Staging Worker secret binding. Never display, paste into chat, commit, or include its value in evidence.
+- Do not run Bootstrap again, recreate a Bootstrap Token, create another administrator, or rotate the existing TOTP secret during routine testing.
+- Use the existing administrator account and a fresh TOTP time-step for each privileged operation.
+- Logout tests must verify that the current Session is revoked. Do not revoke unrelated administrator Sessions.
+
+## 6. Verified code and HTTP checks
+
+The acceptance baseline code commit was `536fc8a85aa4759a7f42314752fdfe0721c193be`. The following local checks passed:
+
+```powershell
+node --check .\src\worker.js
+node .\scripts\test_password_kdf.mjs
+node .\scripts\test_auth_audit.mjs
+python .\scripts\validate_release.py
+```
+
+The GitHub Actions `validate` job for this commit passed in [workflow run 46097236610](https://github.com/morningstarkalis/morningstar-ai-official-site/actions/runs/46097236610).
+
+The following live Staging tests were also completed:
+
+| Test | Observed result |
+|---|---|
+| `GET /api/health` | HTTP 200; database connected |
+| `GET /api/setup-status` | HTTP 200; admin initialized; Bootstrap not configured |
+| Invalid login attempts 1–8 | HTTP 401 each |
+| Invalid login attempt 9 | HTTP 429 |
+| Administrator login | HTTP 200 |
+| Invalid TOTP | HTTP 401 |
+| Valid TOTP | HTTP 200 |
+| Replayed TOTP time-step | HTTP 409 |
+| Administrator logout | HTTP 200 |
+| Stale Session after logout | HTTP 401 |
+| Authenticated member on `GET /api/admin/overview` | HTTP 403 |
+
+For the login rate-limit test, supply the correct same-origin `Origin` header. A request failing the Origin check is a separate HTTP 403 and must not be counted as an invalid-password attempt.
+
+### CI exception requiring follow-up
+
+The Cloudflare `Workers Builds: morningstar-ai-official-site` Check Run on commit `536fc8a` concluded `failure` (Check Run ID `140831508571`). The GitHub Check Run response did not provide diagnostic annotations or a root cause. Track and resolve this build failure before PR #2 is merged. Do not report every CI/build system as green merely because the GitHub Actions `validate` job passed.
+
+## 7. Database audit counts and fixture cleanup
+
+A read-only Staging D1 query confirmed these audit action totals at the time of acceptance:
+
+| Audit action | Count |
+|---|---:|
+| `admin.login.failed` | 8 |
+| `admin.login.rate_limited` | 1 |
+| `admin.login.succeeded` | 2 |
+| `admin.totp.invalid` | 1 |
+| `admin.mfa.accepted` | 1 |
+| `admin.totp.replay_rejected` | 1 |
+| `admin.logout` | 2 |
+| `admin.access.denied` | 1 |
+
+The temporary normal-member fixture and its Session were deleted after the HTTP 403 test. Post-cleanup read-only checks returned:
+
+- temporary member rows: 0;
+- temporary Session rows: 0;
+- retained `admin.access.denied` audit record for `GET /api/admin/overview`: 1;
+- active Staging administrators: 1;
+- rate-limit test `auth_attempts` residue: 0.
+
+The audit evidence is intentionally retained. Do not delete it as part of fixture cleanup. The read-only verification queries returned `changed_db=false` and `rows_written=0`.
+
+Refer to [MorningStar Staging Integration Acceptance Report v1.0](STAGING_INTEGRATION_ACCEPTANCE_REPORT_v1.0.md) for the full three-layer evidence record, including deployment IDs, HTTP response results, index verification, audit counts and Production boundary.
+
+## 8. Production isolation status
+
+The Production Worker remains `morningstar-ai-official-site`. A read-only Cloudflare deployments query after the Staging deployment showed the latest Production deployment still at:
+
+- Active Version ID: `96ea2857-9ab1-4d69-b518-63a325b07cec`
+- Deployment ID: `d62bb0de-82ee-4b92-b191-5209f54d5e18`
+- Traffic: 100%
+- Created: 2026-11-27 18:11:22.583465 UTC
+
+No Production Worker deployment, Production D1 migration, Production D1 write, or Production Secret modification was performed for this Staging acceptance. Re-check the Production active deployment before and after any future Production change; do not treat Staging acceptance as Production approval.
+
+## 9. Remaining feature and release restrictions
+
+The following are intentionally not enabled or not yet accepted:
+
+- Model Series registration, order requests and inference remain disabled.
+- R2 private artifact storage and a real model inference service are not configured; private artifact delivery and live inference cannot pass end-to-end verification.
+- MorningStar Skill RC7 remains a candidate; its 18 rights assets are pending rights review.
+- Production migration, deployment and website cutover have not occurred.
+- This acceptance is not an independent penetration test, legal opinion, certification or public-release approval.
+
+Keep PR #2 Draft and unmerged until the separate merge and release blockers, including the Cloudflare Workers Builds failure, have been reviewed and resolved.
