@@ -21,5 +21,7 @@ jobs:
         run: node --check src/worker.js
       - name: Test password hashing and legacy upgrade path
         run: node scripts/test_password_kdf.mjs
+      - name: Test administrator authentication audit and access contracts
+        run: node scripts/test_auth_audit.mjs
       - name: Test migration chain and release guards
         run: python3 scripts/validate_release.py
