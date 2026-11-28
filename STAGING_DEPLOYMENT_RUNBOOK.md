@@ -7,9 +7,11 @@
 
 ## Important staging migration note
 
-The eight SQL migrations were already applied to this staging D1 through the Cloudflare D1 API and verified. The database has the project-level `schema_migrations` table, but it was not initialized through Wrangler's own `d1_migrations` tracking table.
+The original migrations 0001–0008 were applied to this staging D1 through the Cloudflare D1 API and verified. The database has the project-level `schema_migrations` table, but it was not initialized through Wrangler's own `d1_migrations` tracking table.
 
-**Do not run `wrangler d1 migrations apply` against this existing staging D1.** Wrangler may consider all files unapplied and re-run non-idempotent ALTER TABLE migrations 0006 and 0007. Use this database only for Worker deployment and API testing. A future fresh staging database should be initialized through Wrangler migrations from the start.
+The security-audit remediation branch adds migration `0009_security_audit_indexes.sql`. **That migration is pending and has not been applied to Staging or Production.** It adds only an index to the existing `audit_log` table. Apply and verify it against the Staging D1 through the approved Cloudflare D1 API procedure before deploying the revised Worker.
+
+**Do not run `wrangler d1 migrations apply` against this existing staging D1.** Wrangler may consider all files unapplied and re-run non-idempotent ALTER TABLE migrations 0006 and 0007. Do not apply any migration to Production as part of this Staging work. A future fresh staging database should be initialized through Wrangler migrations from the start.
 
 ## Local prerequisites
 
@@ -64,17 +66,11 @@ When prompted, paste the generated values. Add the same TOTP Base32 secret to a 
 - The PowerShell preflight must return PASS before any administrator Bootstrap attempt. A failure means stop; do not retry Bootstrap.
 - For a guarded one-command update, local validation, Staging-only deployment and real-runtime preflight, run `powershell -ExecutionPolicy Bypass -File scripts/apply_staging_kdf_fix.ps1` from any directory. It preserves the local Staging config, refuses unrelated working-tree changes, and never sends the actual Bootstrap request.
 
-## 3. Bootstrap staging administrator
+## 3. Existing staging administrator state
 
-1. Open the staging Worker URL followed by `/admin.html`.
-2. Enter the one-time bootstrap token, staging admin email, display name and a strong unique password.
-3. After the administrator is created, remove the bootstrap secret:
+The Staging administrator has already been initialized and the one-time `ADMIN_BOOTSTRAP_TOKEN` has been removed from the Staging Worker. The live `/api/setup-status` response was verified as `needs_admin=false` and `bootstrap_configured=false`; the Staging TOTP secret remains configured.
 
-```powershell
-npx wrangler secret delete ADMIN_BOOTSTRAP_TOKEN --config .\wrangler.staging.jsonc
-```
-
-4. Log in again and use a fresh TOTP for every privileged action.
+Do not run Bootstrap again, do not recreate `ADMIN_BOOTSTRAP_TOKEN`, and do not rotate `ADMIN_TOTP_SECRET` as part of routine testing. Use the existing administrator credentials and a fresh TOTP for every privileged operation.
 
 The staging D1 currently contains zero users, zero admins and zero sessions, so first-admin bootstrap is expected.
 
@@ -84,7 +80,9 @@ The staging D1 currently contains zero users, zero admins and zero sessions, so 
 - Public Skill content must load without member sign-in.
 - Model Series catalog may be empty; registration, order requests and inference must remain disabled.
 - Admin overview must require a fresh TOTP.
-- Reusing the same TOTP time-step must fail.
+- Reusing the same TOTP time-step must fail with HTTP 409 and create a bounded `admin.totp.replay_rejected` audit event.
+- Failed admin login, throttled login, non-admin role denial, invalid/replayed TOTP, accepted MFA and admin logout must use the new security audit actions.
+- A non-admin Session must receive HTTP 403 from an admin route; a dedicated non-admin test identity is required before claiming this dynamic test passed.
 - No Model Series member can be registered while required flags and legal/processor/retention controls remain false.
 - No private download is possible without R2, an active license and the download scope.
 - No inference call is possible without the private service binding and secret.
