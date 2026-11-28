@@ -35,6 +35,26 @@ audit_index = db.execute("SELECT 1 FROM sqlite_master WHERE type='index' AND nam
 if not audit_index:
     raise SystemExit("FAIL: security audit lookup index is missing")
 print("PASS: security audit lookup index")
+audit_dedupe_sql = """
+INSERT INTO audit_log (id,actor_user_id,action,target_type,target_id,detail_json,created_at)
+SELECT ?,?,?,?,?,?,? WHERE NOT EXISTS (
+ SELECT 1 FROM audit_log WHERE actor_user_id IS ? AND action=? AND target_type IS ? AND target_id IS ? AND created_at>?
+)
+"""
+dedupe_now = "2026-11-28T03:00:00.000Z"
+dedupe_cutoff = "2026-11-28T02:45:00.000Z"
+dedupe_key = "test-only-auth-identity-sha256"
+def insert_deduped_security_event(event_id):
+    return db.execute(audit_dedupe_sql, (
+        event_id, None, "admin.login.rate_limited", "auth_identity", dedupe_key,
+        '{"threshold":8,"window_minutes":15}', dedupe_now,
+        None, "admin.login.rate_limited", "auth_identity", dedupe_key, dedupe_cutoff,
+    )).rowcount
+first_event = insert_deduped_security_event("test-security-audit-first")
+duplicate_event = insert_deduped_security_event("test-security-audit-duplicate")
+if first_event != 1 or duplicate_event != 0:
+    raise SystemExit(f"FAIL: audit deduplication must insert once; got first={first_event}, duplicate={duplicate_event}")
+print("PASS: atomic audit event deduplication (one insert, duplicate suppressed)")
 required = {
     "schema_migrations", "users", "sessions", "products", "orders", "licenses",
     "skill_releases", "model_members", "model_sessions", "model_products",
