@@ -70,6 +70,7 @@ Do not commit API keys, bootstrap tokens, private model assets, private datasets
 - [Data flow and retention register](DATA_FLOW_AND_RETENTION.md)
 - [Release blockers and acceptance gates](RELEASE_BLOCKERS.md)
 - [Administrator operations](ADMIN_OPERATIONS.md)
+- [Staging admin authentication audit remediation](STAGING_ADMIN_AUTH_AUDIT_REMEDIATION_v1.0.md)
 - [Commercial core boundary](COMMERCIAL_CORE_BOUNDARY.md)
 - [Model Series production activation checklist](MODEL_SERIES_PRODUCTION_CHECKLIST.md)
 - [Staging deployment runbook](STAGING_DEPLOYMENT_RUNBOOK.md)
